@@ -1,0 +1,28 @@
+{
+    "id": "DF33E803",
+    "path": null,
+    "project_path": null,
+    "type": "object_explorer",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1755279029230.0,
+    "source_on_save": false,
+    "relative_order": 15,
+    "properties": {
+        "id": "a609ac32348543ddb7573f60cf2aae1a",
+        "name": "sim_results",
+        "title": "sim_results",
+        "language": "R",
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 0,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1755279029230,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,27 @@
+{
+    "id": "C5110A65",
+    "path": "~/Documents/mGWAS/snp.sim.Q.mod.R",
+    "project_path": "snp.sim.Q.mod.R",
+    "type": "r_source",
+    "hash": "839122377",
+    "contents": "",
+    "dirty": false,
+    "created": 1755114991287.0,
+    "source_on_save": false,
+    "relative_order": 9,
+    "properties": {
+        "tempName": "Untitled4",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "476,54",
+        "scrollLine": "465"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1755116437,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1755116437997,
+    "read_only": false,
+    "read_only_alternatives": []
+}
