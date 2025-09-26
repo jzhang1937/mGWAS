@@ -335,7 +335,7 @@ snp.sim.mod <- function(n.snps = 10000,
     ## for all snps other than root, we mutate the
     ## genome of the node preceding it, according to snps.loci.
     ## Draw new nts for each locus selected for mutation:
-    if(!.is.integer0(snps.loci.unique[[i]])){
+    if(!treeWAS::.is.integer0(snps.loci.unique[[i]])){
       new.nts[[i]] <- !snps[[tree$edge[i,1]]][snps.loci.unique[[i]]]
       
       
@@ -500,7 +500,7 @@ snp.sim.mod <- function(n.snps = 10000,
       ## for all snps other than root, we mutate the
       ## genome of the node preceding it, according to snps.loci.
       ## Draw new nts for each locus selected for mutation:
-      if(!.is.integer0(snps.loci.unique[[i]])){
+      if(!treeWAS::.is.integer0(snps.loci.unique[[i]])){
         new.nts[[i]] <- !snps[[tree$edge[i,1]]][toRepeat][snps.loci.unique[[i]]]
         
         ## if any loci are selected for multiple mutations
@@ -627,7 +627,7 @@ snp.sim.mod <- function(n.snps = 10000,
       
       ## get nt for each individual at this locus
       ## assign to (and replace) the snps.assoc elements of loci
-      temp[, snps.assoc[i]] <- .get.locus(subs.edges = subs.edges,
+      temp[, snps.assoc[i]] <- treeWAS:::.get.locus(subs.edges = subs.edges,
                                           root.nt = root.nt,
                                           tree = tree)[1:n.ind]
     }
@@ -715,7 +715,7 @@ snp.sim.mod <- function(n.snps = 10000,
           ## change those snps at rows toChange, loci snps.assoc[i]
           for(j in 1:length(toChange)){
             snps[toChange[j], snps.assoc[i]] <-
-              selectBiallelicSNP(snps[toChange[j], snps.assoc[i]])
+              treeWAS::selectBiallelicSNP(snps[toChange[j], snps.assoc[i]])
           } # end for loop
         }
       } # end for loop
@@ -881,11 +881,11 @@ snp.sim.mod <- function(n.snps = 10000,
         while(grp1 < min.size | grp1 > max.size){
           
           ## get all descendants of root node:
-          all.dec <- .getDescendants(tree, node=new.root)
+          all.dec <- treeWAS:::.getDescendants(tree, node=new.root)
           
           ## get all descendants in first 2 major clades:
-          dec[[1]] <- .getDescendants(tree, node=all.dec[1])
-          dec[[2]] <- .getDescendants(tree, node=all.dec[2])
+          dec[[1]] <- treeWAS:::.getDescendants(tree, node=all.dec[1])
+          dec[[2]] <- treeWAS:::.getDescendants(tree, node=all.dec[2])
           
           ## get terminal inds only:
           sets.temp[[1]] <- dec[[1]][which(dec[[1]] %in% inds)]

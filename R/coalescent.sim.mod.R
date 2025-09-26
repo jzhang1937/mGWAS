@@ -285,7 +285,7 @@ coalescent.sim.mod <- function(n.ind = 100,
   if(is.null(tree)){
     if(coaltree == TRUE){
       if(!is.null(seed)) set.seed(seed)
-      tree <- coalescent.tree.sim(n.ind = n.ind, seed = seed)
+      tree <- treeWAS::coalescent.tree.sim(n.ind = n.ind, seed = seed)
     }else{
       if(!is.null(seed)) set.seed(seed)
       tree <- rtree(n = n.ind)
@@ -375,7 +375,7 @@ coalescent.sim.mod <- function(n.ind = 100,
     if(is.null(phen)){
       if(!is.null(seed)) set.seed(seed)
       ## get list of phenotype simulation output
-      phen.list <- phen.sim(tree, n.subs = n.phen.subs, grp.min = grp.min, seed = seed)
+      phen.list <- treeWAS::phen.sim(tree, n.subs = n.phen.subs, grp.min = grp.min, seed = seed)
       
       ## get phenotype for terminal nodes only
       phen <- phen.list$phen
@@ -390,7 +390,7 @@ coalescent.sim.mod <- function(n.ind = 100,
       #############################
       ## User-provided Phenotype ##
       #############################
-      phen.nodes <- asr(phen, tree, type="parsimony")
+      phen.nodes <- treeWAS::asr(phen, tree, type="parsimony")
       
       ## get COLOR for NODES
       nodeCol <- "grey"
@@ -492,13 +492,13 @@ coalescent.sim.mod <- function(n.ind = 100,
   }
   
   if(plot==TRUE){
-    if("try-error" %in% class(try(plot_phen(tree = tree,
+    if("try-error" %in% class(try(treeWAS::plot_phen(tree = tree,
                                             phen.nodes = phen.nodes,
                                             plot = plot)))){
       warning("Oops-- something went wrong when trying to plot
               phenotypic changes on tree.")
     }else{
-      phen.plot.col <- plot_phen(tree = tree,
+      phen.plot.col <- treeWAS::plot_phen(tree = tree,
                                  phen.nodes = phen.nodes,
                                  plot = plot, main.title=FALSE)
     }
@@ -596,8 +596,8 @@ coalescent.sim.mod <- function(n.ind = 100,
   ## (+) Copy treeWAS lines for all checks/cleaning: phen.rec ~1201:1244...
   ## (+) Add args: phen.reconstruction, phen.rec.method, snps.reconstruction, snps.rec.method.
   ## (+?) Add check/warning for categorical phen (if phen.type=discrete but prop.u < 0.1 (?))
-  snps.rec <- asr(var = snps, tree = tree, unique.cols = TRUE) # , type = snps.reconstruction)
-  phen.rec <- asr(var = phen, tree = tree, method = phen.rec.method) #, type = phen.reconstruction)
+  snps.rec <- treeWAS::asr(var = snps, tree = tree, unique.cols = TRUE) # , type = snps.reconstruction)
+  phen.rec <- treeWAS::asr(var = phen, tree = tree, method = phen.rec.method) #, type = phen.reconstruction)
   
   ################
   
