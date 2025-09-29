@@ -1,3 +1,14 @@
+#' Title
+#'
+#' @param n.ind 
+#' @param n.snps 
+#' @param n.snps.assoc 
+#' @param assoc.prob 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
 generate_data_treeWAS <- function(n.ind, n.snps, n.snps.assoc, assoc.prob) {
   data <- treeWAS::coalescent.sim(n.ind = n.ind, n.snps = n.snps,
                                   n.snps.assoc = n.snps.assoc,
@@ -5,6 +16,19 @@ generate_data_treeWAS <- function(n.ind, n.snps, n.snps.assoc, assoc.prob) {
   return(data)
 }
 
+#' Title
+#'
+#' @param n.ind 
+#' @param n.snps 
+#' @param n.snps.assoc 
+#' @param assoc.prob 
+#' @param set 
+#' @param ground_truth 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
 generate_data_treeWAS_mod <- function(n.ind, n.snps, n.snps.assoc, assoc.prob = 95, set = 1, ground_truth) {
   data <- coalescent.sim.mod(n.ind = n.ind, n.snps = n.snps,
                                   n.snps.assoc = n.snps.assoc,
@@ -12,6 +36,22 @@ generate_data_treeWAS_mod <- function(n.ind, n.snps, n.snps.assoc, assoc.prob = 
                              ground.truth = ground_truth)
   return(data)
 }
+#' Title
+#'
+#' @param n 
+#' @param p 
+#' @param s 
+#' @param joint_X 
+#' @param y_given_X 
+#' @param X_hyperparams 
+#' @param y_given_X_hyperparams 
+#' @param amplitude 
+#' @param ground_truth 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
 generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
                           y_given_X_hyperparams, amplitude, ground_truth) {
   # get the list of arguments
