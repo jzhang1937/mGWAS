@@ -12,7 +12,7 @@ generate_data_treeWAS_mod <- function(n.ind, n.snps, n.snps.assoc, assoc.prob = 
                              ground.truth = ground_truth)
   return(data)
 }
-generate_data <- function(n, p, joint_X, y_given_X, X_hyperparams,
+generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
                           y_given_X_hyperparams, amplitude, ground_truth) {
   # get the list of arguments
   data_gen_args <- as.list(environment())
@@ -20,9 +20,8 @@ generate_data <- function(n, p, joint_X, y_given_X, X_hyperparams,
   # generate genome
   if (joint_X == "treeWAS") {
     assoc.prob <- as.integer(X_hyperparams$assoc.prob)
-    n.snps.assoc <- as.integer(X_hyperparams$n.snps.assoc)
     set <- as.integer(X_hyperparams$set)
-    sim.data <- generate_data_treeWAS_mod(n.ind = n, n.snps = p, n.snps.assoc = n.snps.assoc,
+    sim.data <- generate_data_treeWAS_mod(n.ind = n, n.snps = p, n.snps.assoc = s,
                                           assoc.prob = assoc.prob, set = set,
                                           ground_truth = ground_truth)
     X <- sim.data$snps
@@ -30,7 +29,7 @@ generate_data <- function(n, p, joint_X, y_given_X, X_hyperparams,
     y <- sim.data$phen - 1
     y.rec <- sim.data$phen.rec
     tree <- sim.data$tree
-    nonnulls <- sim.data$snps.assoc
+    nonnulls <- ground_truth$nonnulls
     
   } else if (joint_X == "simurg") {
     ref <- 'ref_tutorial.fasta'

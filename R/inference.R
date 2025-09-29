@@ -22,7 +22,6 @@ oracle_treeWAS_wrapper <- function(data, method) {
                                                plot.null.dist = FALSE,
                                                plot.null.dist.pairs = FALSE))
   results$dat <- NULL
-  results$nonnulls <- data$snps.assoc
   results
 }
 
@@ -46,10 +45,24 @@ treeWAS_wrapper <- function(data, method) {
                                                plot.null.dist = FALSE,
                                                plot.null.dist.pairs = FALSE))
   results$dat <- NULL
-  results$nonnulls <- data$snps.assoc
   results
 }
 
+#' Title
+#'
+#' @param data 
+#' @param method 
+#' @param tmpdir 
+#' @param output 
+#' @param conda_bin 
+#' @param pyseer_env 
+#' @param extra_args 
+#' @param keep_files 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
 pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",  
                            output = "pyseer_out.txt",
                            conda_bin,
