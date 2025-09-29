@@ -52,18 +52,22 @@ treeWAS_wrapper <- function(data, method) {
 
 pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",  
                            output = "pyseer_out.txt",
+                           conda_bin,
+                           pyseer_env,
                            extra_args = NULL,
                            keep_files = FALSE) {
   X <- data$X
   y <- data$y
   n <- length(y)
   tree <- data$tree
-  method <- match.arg(method)
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
   
   # make sure temp directory exists
   if (!dir.exists(tmpdir)) {
     dir.create(tmpdir, recursive = TRUE)
   }
+  tmpdir_time <- file.path(tmpdir, timestamp)
+  dir.create(tmpdir_time, recursive = TRUE)
   
   # sample names check 
   if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
@@ -75,14 +79,14 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   samples <- names(y)
   
   # make phenotype file
-  pheno_file <- file.path(tmpdir, "phenotypes.txt")
+  pheno_file <- file.path(tmpdir_time, "phenotypes.txt")
   pheno_df <- data.frame(sample = samples, phenotype = y[samples],
                          stringsAsFactors = FALSE)
   write.table(pheno_df, pheno_file, sep = "\t", quote = FALSE,
               row.names = FALSE, col.names = TRUE)
   
   # make genotype file
-  geno_file <- file.path(tmpdir, "variants.pres.tsv")
+  geno_file <- file.path(tmpdir_time, "variants.pres.tsv")
   mat <- t(X[samples, , drop = FALSE])   
   geno_out <- data.frame(variant = rownames(mat), mat, check.names = FALSE)
   write.table(geno_out, geno_file, sep = "\t", quote = FALSE,
@@ -91,21 +95,25 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   # distances / similarities from tree 
   dist_file <- sim_file <- NULL
   if (!is.null(tree)) {
-    tr <- if (file.exists(tree)) ape::read.tree(tree) else ape::read.tree(text = tree)
-    tr <- ape::keep.tip(tr, samples)
+    tr <- ape::keep.tip(tree, samples)
     
     if (method == "fixed") {
       D <- ape::cophenetic.phylo(tr)[samples, samples]
-      dist_file <- file.path(tmpdir, "distances.txt")
+      dist_file <- file.path(tmpdir_time, "distances.txt")
       write.table(D, dist_file, sep = "\t", quote = FALSE,
                   row.names = TRUE, col.names = TRUE)
     }
     
-    if (method == "mixed") {
-      D <- ape::cophenetic.phylo[samples, samples]
+    else if (method == "mixed") {
+      D <- ape::cophenetic.phylo(tr)[samples, samples]
       sim <- exp(-D)   # similarity from distances
-      sim_file <- file.path(tmpdir, "similarities.txt")
+      sim_file <- file.path(tmpdir_time, "similarities.txt")
       write.table(sim, sim_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = TRUE)
+    } else if (method == "elasticnet") {
+      D <- ape::cophenetic.phylo(tr)[samples, samples]
+      dist_file <- file.path(tmpdir_time, "distances.txt")
+      write.table(D, dist_file, sep = "\t", quote = FALSE,
                   row.names = TRUE, col.names = TRUE)
     }
   }
@@ -113,22 +121,26 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   # make pyseer command
   cmd <- c("pyseer",
            paste0("--phenotypes ", pheno_file),
-           paste0("--pres ", geno_file),
-           paste0("--output-pattern ", file.path(tmpdir, output)))
+           paste0("--pres ", geno_file))
   
   if (!is.null(dist_file))  cmd <- c(cmd, paste0("--distances ", dist_file))
-  if (!is.null(sim_file))   cmd <- c(cmd, paste0("--similarities ", sim_file), "--lmm")
-  if (!is.null(extra_args)) cmd <- c(cmd, extra_args)
+  if (!is.null(sim_file))   cmd <- c(cmd, paste0("--similarity ", sim_file), "--lmm")
+  if (method == "elasticnet") cmd <- c(cmd, "--wg enet --alpha 1")
+  # if (!is.null(extra_args)) cmd <- c(cmd, extra_args)
   
   cmd_str <- paste(cmd, collapse = " ")
-  message("Running: ", cmd_str)
-  system(cmd_str)
+  # prepend conda run
+  full_cmd <- paste(conda_bin, "run -n", pyseer_env, cmd_str,
+                    paste0("> ", file.path(tmpdir_time, output)))
+  
+  message("Running: ", full_cmd)
+  system(full_cmd)
   
   # get results
-  res <- read.table(file.path(tmpdir, output), header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+  res <- read.table(file.path(tmpdir_time, output), header = TRUE, sep = "\t", stringsAsFactors = FALSE)
   
   # remove files
-  if (!keep_files) unlink(tmpdir, recursive = TRUE)
+  if (!keep_files) unlink(file.path(tmpdir_time), recursive = TRUE)
   
   return(res)
 }
@@ -141,7 +153,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
 #' @export
 #'
 #' @examples
-hogwash_wrapper <- function(data) {
+hogwash_wrapper <- function(data, method = "synchronous") {
   snps <- data$X
   phen <- data$y
   binary <- all(y %in% c(0, 1))
@@ -156,28 +168,48 @@ hogwash_wrapper <- function(data) {
   }
   # make labels
   tree$node.label <- rep(100, tree$Nnode)
-  # run hogwash
-  hogwash::hogwash(pheno = as.matrix(phen), 
-          geno = as.matrix(snps),  
-          tree = tree,      
-          file_name = timestamp,
-          dir = "hogwash",
-          perm = 10000,
-          fdr = 0.1,
-          test = "both")
-  if (binary) {
-    synchronous <- read.rda(paste0("hogwash/hogwash_synchronous_", timestamp, ".rda"))
-    convergence <- read.rda(paste0("hogwash/hogwash_convergence_", timestamp, ".rda"))
-    unlink("hogwash/*", recursive = TRUE)
-    return(list(synchronous = synchronous, convergence = convergence))
+  
+  if (method == "synchronous") {
+    # run hogwash
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1,
+                     test = "synchronous")
+    load(paste0("hogwash/hogwash_synchronous_", timestamp, ".rda"))
+    synchronous <- hogwash_synchronous
+    return(synchronous)
+  } else if (method == "phyc") {
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1,
+                     test = "phyc")
+    load(paste0("hogwash/hogwash_phyc_", timestamp, ".rda"))
+    phyc <- hogwash_phyc
+    unlink(paste0("hogwash/hogwash_phyc_", timestamp, "*"), recursive = TRUE)
+    return(phyc)
   } else {
-    continuous <- read.rda(paste0("hogwash/hogwash_continuous_", timestamp, ".rda"))
-    unlink("hogwash/*", recursive = TRUE)
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1)
+    load(paste0("hogwash/hogwash_continuous_", timestamp, ".rda"))
+    continuous <- hogwash_continuous
+    unlink(paste0("hogwash/hogwash_continuous_", timestamp, "*"), recursive = TRUE)
     return(continuous)
   }
-  
-}
-
-bugwas_wrapper <- function(data) {
   
 }
