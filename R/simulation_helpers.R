@@ -104,9 +104,16 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
   family <- y_given_X_hyperparams$family
   family_object <- eval(parse(text = sprintf("stats::%s()", family)))
   
+  # check the sign
+  if (is.null(y_given_X_hyperparams$sign)) {
+    sign <- rep(1, p)
+  } else {
+    sign <- y_given_X_hyperparams$sign[1:p]
+  }
+  
   # generate y's.
   if (y_given_X == "linear") {
-    beta <- amplitude * (1:p %in% ground_truth$nonnulls)
+    beta <- amplitude * (1:p %in% ground_truth$nonnulls) * sign
     if (is.null(X.rec)) {
       X.rec <- X
     }
@@ -118,7 +125,7 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     y <- y.rec[1:n]
     names(y) <- rownames(X)
   } else if (y_given_X == "gam") {
-    beta <- amplitude * (1:p %in% ground_truth$nonnulls)
+    beta <- amplitude * (1:p %in% ground_truth$nonnulls) * sign
     transforms <- y_given_X_hyperparams$transforms
     # Make transformed X
     if (is.null(X.rec)) {
