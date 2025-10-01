@@ -58,12 +58,21 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
   data_gen_args <- as.list(environment())
   
   # generate genome
-  if (joint_X == "treeWAS") {
+  if (joint_X == "treeWAS_mod") {
     assoc.prob <- as.integer(X_hyperparams$assoc.prob)
     set <- as.integer(X_hyperparams$set)
     sim.data <- generate_data_treeWAS_mod(n.ind = n, n.snps = p, n.snps.assoc = s,
                                           assoc.prob = assoc.prob, set = set,
                                           ground_truth = ground_truth)
+    X <- sim.data$snps
+    X.rec <- sim.data$snps.rec
+    y <- sim.data$phen - 1
+    y.rec <- sim.data$phen.rec
+    tree <- sim.data$tree
+    nonnulls <- ground_truth$nonnulls
+    
+  } else if (joint_X == "treeWAS") {
+    sim.data <- treeWAS::coalescent.sim(n.ind = n, n.snps = p, plot = FALSE)
     X <- sim.data$snps
     X.rec <- sim.data$snps.rec
     y <- sim.data$phen - 1
