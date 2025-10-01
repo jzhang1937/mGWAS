@@ -74,7 +74,9 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
   } else if (joint_X == "treeWAS") {
     sim.data <- treeWAS::coalescent.sim(n.ind = n, n.snps = p, plot = FALSE)
     X <- sim.data$snps
+    storage.mode(X) <- "integer"
     X.rec <- sim.data$snps.rec
+    storage.mode(X.rec) <- "integer"
     y <- sim.data$phen - 1
     y.rec <- sim.data$phen.rec
     tree <- sim.data$tree
