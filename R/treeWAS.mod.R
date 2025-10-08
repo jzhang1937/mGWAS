@@ -359,6 +359,7 @@ coalescent.sim.mod <- function(n.ind = 100,
     sets <- NULL
     phen <- snps.list$phen
     phen.nodes <- snps.list$phen.nodes
+    n.mts <- snps.list$n.mts
     
     if(!is.null(filename)){
       ## end saving panel plot:
@@ -478,6 +479,7 @@ coalescent.sim.mod <- function(n.ind = 100,
     snps <- snps.list$snps
     snps.assoc <- snps.list$snps.assoc
     sets <- snps.list$sets
+    n.mts <- snps.list$n.mts
     
   }
   
@@ -604,8 +606,8 @@ coalescent.sim.mod <- function(n.ind = 100,
   ################
   ## Get Output ##
   ################
-  out <- list(snps, snps.rec, snps.assoc, phen, phen.rec, tree, sets, args)
-  names(out) <- c("snps", "snps.rec", "snps.assoc", "phen", "phen.rec", "tree", "sets", "args")
+  out <- list(snps, snps.rec, snps.assoc, phen, phen.rec, tree, sets, args, n.mts)
+  names(out) <- c("snps", "snps.rec", "snps.assoc", "phen", "phen.rec", "tree", "sets", "args", "n.mts")
   return(out)
   
 } # end coalescent.sim
@@ -1510,8 +1512,8 @@ snp.sim.mod <- function(n.snps = 10000,
   ##################
   ## get RESULTS: ##
   ##################
-  out <- list(snps, snps.assoc, tree.reconstructed, sets)
-  names(out) <- c("snps", "snps.assoc", "tree.reconstructed", "sets")
+  out <- list(snps, snps.assoc, tree.reconstructed, sets, n.mts)
+  names(out) <- c("snps", "snps.assoc", "tree.reconstructed", "sets", "n.mts")
   
   return(out)
   
@@ -2058,8 +2060,8 @@ snp.sim.Q.mod.new <- function(n.snps = 10,
   ##################
   ## get RESULTS: ##
   ##################
-  out <- list(snps, snps.assoc, snps.assoc.nodes, snps.assoc.direction, tree.reconstructed, phen, phen.nodes)
-  names(out) <- c("snps", "snps.assoc", "snps.assoc.nodes", "snps.assoc.direction", "tree.reconstructed",  "phen", "phen.nodes")
+  out <- list(snps, snps.assoc, snps.assoc.nodes, snps.assoc.direction, tree.reconstructed, phen, phen.nodes, n.mts)
+  names(out) <- c("snps", "snps.assoc", "snps.assoc.nodes", "snps.assoc.direction", "tree.reconstructed",  "phen", "phen.nodes", "n.mts")
   
   return(out)
   
@@ -3227,8 +3229,8 @@ snp.sim.Q.mod <- function(n.snps = 10000,
   ##################
   ## get RESULTS: ##
   ##################
-  out <- list(snps, snps.assoc, tree.reconstructed, sets, phen, phen.nodes)
-  names(out) <- c("snps", "snps.assoc", "tree.reconstructed", "sets", "phen", "phen.nodes")
+  out <- list(snps, snps.assoc, tree.reconstructed, sets, phen, phen.nodes, n.mts)
+  names(out) <- c("snps", "snps.assoc", "tree.reconstructed", "sets", "phen", "phen.nodes", "n.mts")
   
   return(out)
   

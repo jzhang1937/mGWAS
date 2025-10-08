@@ -69,10 +69,16 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     y <- sim.data$phen - 1
     y.rec <- sim.data$phen.rec
     tree <- sim.data$tree
+    n.mts <- NULL
     nonnulls <- ground_truth$nonnulls
     
   } else if (joint_X == "treeWAS") {
-    sim.data <- treeWAS::coalescent.sim(n.ind = n, n.snps = p, plot = FALSE)
+    if (is.null(X_hyperparams$n.subs)) {
+      n.subs <- 1
+    } else {
+      n.subs <- X_hyperparams$n.subs
+    }
+    sim.data <- treeWAS::coalescent.sim(n.ind = n, n.snps = p, n.subs = n.subs, plot = FALSE)
     X <- sim.data$snps
     storage.mode(X) <- "integer"
     X.rec <- sim.data$snps.rec
@@ -80,6 +86,24 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     y <- sim.data$phen - 1
     y.rec <- sim.data$phen.rec
     tree <- sim.data$tree
+    n.mts <- NULL
+    nonnulls <- ground_truth$nonnulls
+    
+  } else if (joint_X == "treeWAS_mGWAS") {
+    if (is.null(X_hyperparams$n.subs)) {
+      n.subs <- 1
+    } else {
+      n.subs <- X_hyperparams$n.subs
+    }
+    sim.data <- mGWAS::coalescent.sim.mod(n.ind = n, n.snps = p, n.subs = n.subs, plot = FALSE)
+    X <- sim.data$snps
+    storage.mode(X) <- "integer"
+    X.rec <- sim.data$snps.rec
+    storage.mode(X.rec) <- "integer"
+    y <- sim.data$phen - 1
+    y.rec <- sim.data$phen.rec
+    tree <- sim.data$tree
+    n.mts <- sim.data$n.mts
     nonnulls <- ground_truth$nonnulls
     
   } else if (joint_X == "simurg") {
@@ -185,6 +209,6 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
   }
   
   data <- list(X = X, y = y, X.rec = X.rec, y.rec = y.rec, tree = tree, 
-               nonnulls = nonnulls, data_gen_args = data_gen_args)
+               n.mts = n.mts, nonnulls = nonnulls, data_gen_args = data_gen_args)
 }
 

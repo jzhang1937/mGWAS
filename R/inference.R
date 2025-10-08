@@ -12,8 +12,10 @@ oracle_treeWAS_wrapper <- function(data, method) {
   tree <- data$tree
   snps.rec <- data$X.rec
   phen.rec <- data$y.rec
+  n.mts <- data$n.mts
+  n.subs <- as.vector(table(sim.data$n.mts))
   results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
-                                               tree = tree,
+                                               tree = tree, n.subs = n.subs,
                                                test = method,
                                                snps.reconstruction = snps.rec,
                                                phen.reconstruction = phen.rec,
