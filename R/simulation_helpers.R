@@ -223,7 +223,7 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     # apply transform
     transformed_X <- rowSums(X_subset)
     # draw y
-    y.rec <- as.integer(transformed_X >= order)
+    y.rec <- as.integer(transformed_X >= order * s)
     y <- y.rec[1:n]
     names(y) <- rownames(X)
   }
