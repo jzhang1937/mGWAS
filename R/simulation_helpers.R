@@ -211,20 +211,27 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     if (is.null(X.rec)) {
       X.rec <- X
     }
-    X_subset <- X.rec[,ground_truth$nonnulls]
-    X_interact <- X_subset
-    # highest level of interactions
+    # threshold cutoff
     if (is.null(y_given_X_hyperparams$order)) {
-      order <- 1
+      order <- 0.5
     } else {
       order <- y_given_X_hyperparams$order
     }
+    if (s == 0) {
+      # No causal variants — make random Bernoulli vector
+      transformed_X <- rbinom(n = nrow(X.rec), size = 1, prob = 0.5)
+      # draw y
+      y.rec <- as.integer(transformed_X >= 0.5)
+      y <- y.rec[1:n]
+    } else {
+      # Use actual subset, ensuring matrix shape
+      X_subset <- X.rec[, ground_truth$nonnulls, drop = FALSE]
+      transformed_X <- rowSums(X_subset)
+      # draw y
+      y.rec <- as.integer(transformed_X >= order * s)
+      y <- y.rec[1:n]
+    }
     
-    # apply transform
-    transformed_X <- rowSums(X_subset)
-    # draw y
-    y.rec <- as.integer(transformed_X >= order * s)
-    y <- y.rec[1:n]
     names(y) <- rownames(X)
   }
   
