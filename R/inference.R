@@ -86,7 +86,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   
   # sample names check 
   if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
-  if (is.null(names(y))) rownames(X)
+  if (is.null(names(y))) names(y) <- rownames(X)
   if (!all(names(y) %in% rownames(X))) {
     stop("Sample names in y must match rownames of X")
   }
@@ -153,6 +153,108 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   
   # get results
   res <- read.table(file.path(tmpdir_time, output), header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+  
+  # remove files
+  if (!keep_files) unlink(file.path(tmpdir_time), recursive = TRUE)
+  
+  return(res)
+}
+
+#' Title
+#'
+#' @param data 
+#' @param method 
+#' @param tmpdir 
+#' @param output 
+#' @param conda_bin 
+#' @param pyseer_env 
+#' @param extra_args 
+#' @param keep_files 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+scoary_wrapper <- function(data, tmpdir = "scoary_temp",  
+                           N = 10000,
+                           conda_bin,
+                           scoary_env,
+                           low.var = NULL,
+                           extra_args = NULL,
+                           keep_files = FALSE) {
+  X <- data$X
+  y <- data$y
+  
+  n <- length(y)
+  tree <- data$tree
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+  
+  # make sure temp directory exists
+  if (!dir.exists(tmpdir)) {
+    dir.create(tmpdir, recursive = TRUE)
+  }
+  tmpdir_time <- file.path(tmpdir, timestamp)
+  dir.create(tmpdir_time, recursive = TRUE)
+  
+  # sample names check 
+  if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
+  if (is.null(names(y))) names(y) <- rownames(X)
+  if (!all(names(y) %in% rownames(X))) {
+    stop("Sample names in y must match colnames of X")
+  }
+  
+  samples <- names(y)
+  
+  # make phenotype file
+  pheno_file <- file.path(tmpdir_time, "pheno.csv")
+  pheno_df <- data.frame(Name = samples, phenotype = y[samples],
+                         stringsAsFactors = FALSE)
+  write.csv(pheno_df, pheno_file, row.names = FALSE, quote = FALSE)
+  
+  # make genotype file
+  geno_file <- file.path(tmpdir_time, "geno.csv")
+  mat <- t(X[samples, , drop = FALSE])   
+  geno_out <- data.frame(sample = rownames(mat), mat, check.names = FALSE)
+  write.csv(geno_out, geno_file, row.names = FALSE, quote = FALSE)
+  
+  # tree if tree is nonnull
+  if (!is.null(tree)) {
+    # Write tree file
+    tree_file <- file.path(tmpdir_time, "tree.nwk")
+    ape::write.tree(tree, file = tree_file)
+   
+  }
+  
+  # make pyseer command
+  cmd <- c("scoary",
+           paste0("-t ", pheno_file),
+           paste0("-g ", geno_file),
+           paste0("-o ", tmpdir_time),
+           paste0("-p ", 1.0),
+           paste0("-c I B BH P"),
+           paste0("-e ", N),
+           paste0("-s ", 2))
+  
+  if (!is.null(tree_file))  cmd <- c(cmd, paste0("-n ", tree_file))
+  
+  cmd_str <- paste(cmd, collapse = " ")
+  # prepend conda run
+  full_cmd <- paste(conda_bin, "run -n", scoary_env, cmd_str)
+  
+  message("Running: ", full_cmd)
+  system(full_cmd)
+  
+  # get results
+  # list all results CSVs
+  results_files <- list.files(tmpdir_time, pattern = "\\.results\\.csv$", full.names = TRUE)
+  
+  # trait name
+  trait_name <- "phenotype"
+  
+  # match only the filename (without directory) with the trait
+  trait_file <- results_files[grepl(paste0("^", trait_name), basename(results_files))]
+  
+  res <- read.csv(trait_file[1], stringsAsFactors = FALSE)
   
   # remove files
   if (!keep_files) unlink(file.path(tmpdir_time), recursive = TRUE)

@@ -115,7 +115,7 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
                v = prob.gene.loss, mu = sub.rate, write_by = 'genome', 
                dir_out = 'simurg_temp', force = TRUE, replace = TRUE)
     X <- sim.data$panmatrix
-    X <- X[, apply(X, 2, var) > 0.02]
+    X <- X[, apply(X, 2, var) > 0.025]
     p <- ncol(X)
     tree <- sim.data$coalescent
     tree$node.label <- rep(1, tree$Nnode)
@@ -206,9 +206,76 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     )
     y <- y.rec[1:n]
     names(y) <- rownames(X)
+  } else if (y_given_X == "indicator") {
+    # nonnulls
+    if (is.null(X.rec)) {
+      X.rec <- X
+    }
+    X_subset <- X.rec[,ground_truth$nonnulls]
+    X_interact <- X_subset
+    # highest level of interactions
+    if (is.null(y_given_X_hyperparams$order)) {
+      order <- 1
+    } else {
+      order <- y_given_X_hyperparams$order
+    }
+    
+    # apply transform
+    transformed_X <- rowSums(X_subset)
+    # draw y
+    y.rec <- as.integer(transformed_X >= order)
+    y <- y.rec[1:n]
+    names(y) <- rownames(X)
   }
   
+  # find highly correlated with nonnull variants
+  if (s == 0) {
+    high.cor <- NULL
+  } else {
+    high.cor <- find_correlated_sets(X, nonnulls, thresholds = seq(0.4, 0.9, 0.1))
+  }
+  
+  # find variants with very low variance
+  low.var <- find_low_variance(X, thresholds = seq(0.01, 0.1, 0.01))
+  
   data <- list(X = X, y = y, X.rec = X.rec, y.rec = y.rec, tree = tree, 
-               n.mts = n.mts, nonnulls = nonnulls, data_gen_args = data_gen_args)
+               n.mts = n.mts, nonnulls = nonnulls, high.cor = high.cor,
+               low.var = low.var, data_gen_args = data_gen_args)
 }
+
+
+find_correlated_sets <- function(X, nonnulls, thresholds) {
+  # Get the set of columns not in nonnulls
+  other_cols <- setdiff(seq_len(ncol(X)), nonnulls)
+  
+  # Compute correlation matrix once
+  cors <- cor(X[, other_cols], X[, nonnulls])
+  abs_cors <- abs(cors)
+  
+  # For each threshold, find columns exceeding it
+  result <- lapply(thresholds, function(thresh) {
+    to_keep <- apply(abs_cors, 1, function(x) any(x > thresh))
+    other_cols[to_keep]  # original column indices
+  })
+  
+  names(result) <- paste0("thr_", thresholds)
+  return(result)
+}
+
+find_low_variance <- function(X, thresholds) {
+  # compute per-column variances
+  vars <- apply(X, 2, var, na.rm = TRUE)
+  
+  # for each threshold, collect column indices with var < threshold
+  result <- lapply(thresholds, function(th) {
+    which(vars < th)
+  })
+  
+  # name the list entries for clarity
+  names(result) <- paste0("thr_", thresholds)
+  
+  return(result)
+}
+
+
 
