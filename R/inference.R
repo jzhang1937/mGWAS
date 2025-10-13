@@ -6,7 +6,7 @@
 #' @export
 #'
 #' @examples
-oracle_treeWAS_wrapper <- function(data, method) {
+oracle_treeWAS_wrapper <- function(data, method, n.snps.sim = 10000) {
   snps <- data$X
   phen <- data$y
   tree <- data$tree
@@ -19,6 +19,7 @@ oracle_treeWAS_wrapper <- function(data, method) {
                                                test = method,
                                                snps.reconstruction = snps.rec,
                                                phen.reconstruction = phen.rec,
+                                               n.snps.sim = n.snps.sim,
                                                plot.tree = FALSE,
                                                plot.manhattan = FALSE,
                                                plot.null.dist = FALSE,
@@ -35,13 +36,14 @@ oracle_treeWAS_wrapper <- function(data, method) {
 #' @export
 #'
 #' @examples
-treeWAS_wrapper <- function(data, method) {
+treeWAS_wrapper <- function(data, method, n.snps.sim = 10000) {
   snps <- data$X
   phen <- data$y
   tree <- data$tree
   results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
                                                tree = tree,
                                                test = method,
+                                               n.snps.sim = n.snps.sim,
                                                plot.tree = FALSE,
                                                plot.manhattan = FALSE,
                                                plot.null.dist = FALSE,
