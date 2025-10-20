@@ -71,6 +71,8 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
                            output = "pyseer_out.txt",
                            conda_bin,
                            pyseer_env,
+                           phylo = FALSE,
+                           pyseer_phylo = TRUE,
                            extra_args = NULL,
                            keep_files = FALSE) {
   X <- data$X
@@ -86,7 +88,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   tmpdir_time <- file.path(tmpdir, timestamp)
   dir.create(tmpdir_time, recursive = TRUE)
   
-  # sample names check 
+  # sample names standard
   if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
   if (is.null(names(y))) names(y) <- rownames(X)
   if (!all(names(y) %in% rownames(X))) {
@@ -105,33 +107,78 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   # make genotype file
   geno_file <- file.path(tmpdir_time, "variants.pres.tsv")
   mat <- t(X[samples, , drop = FALSE])   
-  geno_out <- data.frame(variant = rownames(mat), mat, check.names = FALSE)
+  geno_out <- data.frame(Gene = rownames(mat), mat, check.names = FALSE)
   write.table(geno_out, geno_file, sep = "\t", quote = FALSE,
               row.names = FALSE, col.names = TRUE)
   
+  # make sample list file
+  sample_file <- file.path(tmpdir_time, "sample_list.txt")
+  writeLines(samples, sample_file)
+  
   # distances / similarities from tree 
   dist_file <- sim_file <- NULL
-  if (!is.null(tree)) {
+  if (!is.null(tree) & phylo & !pyseer_phylo) {
     tr <- ape::keep.tip(tree, samples)
     
     if (method == "fixed") {
       D <- ape::cophenetic.phylo(tr)[samples, samples]
       dist_file <- file.path(tmpdir_time, "distances.txt")
       write.table(D, dist_file, sep = "\t", quote = FALSE,
-                  row.names = TRUE, col.names = TRUE)
-    }
-    
-    else if (method == "mixed") {
+                  row.names = TRUE, col.names = NA)
+    } else if (method == "mixed") {
       D <- ape::cophenetic.phylo(tr)[samples, samples]
       sim <- exp(-D)   # similarity from distances
       sim_file <- file.path(tmpdir_time, "similarities.txt")
       write.table(sim, sim_file, sep = "\t", quote = FALSE,
-                  row.names = TRUE, col.names = TRUE)
-    } else if (method == "elasticnet") {
-      D <- ape::cophenetic.phylo(tr)[samples, samples]
+                  row.names = TRUE, col.names = NA)
+    } 
+  } else if (!is.null(tree) & phylo & pyseer_phylo) {
+    tree_file <- file.path(tmpdir_time, "core_genome.tree")
+    
+    # Write tree to Newick file
+    ape::write.tree(tree, file = tree_file)
+    
+    # not usable yet...
+    if (method == "fixed") {
+      # compute phylo distances
+      cmd_str <- paste0("python scripts/phylogeny_distance.py ", file.path(tmpdir_time, "core_genome.tree"))
+      full_cmd <- paste(conda_bin, "run -n", pyseer_env, cmd_str,
+                        paste0("> ", file.path(tmpdir_time, "distances.txt")))
+      
+      message("Running: ", full_cmd)
+      system(full_cmd)
+    }
+    else if (method == "mixed") {
+      # compute phylo distances
+      cmd_str <- paste0("python scripts/phylogeny_distance.py --lmm ", file.path(tmpdir_time, "core_genome.tree"))
+      full_cmd <- paste(conda_bin, "run -n", pyseer_env, cmd_str,
+                        paste0("> ", file.path(tmpdir_time, "similarities.txt")))
+      
+      message("Running: ", full_cmd)
+      system(full_cmd)
+      
+    }
+
+  } else {
+    if (method == "fixed") {
+      # compute kinship
+      K <- X %*% t(X)
+      K_norm <- K / ncol(X)
+      D <- 1 - K_norm
+      # set diagonal to 0
+      diag(D) <- 0
       dist_file <- file.path(tmpdir_time, "distances.txt")
       write.table(D, dist_file, sep = "\t", quote = FALSE,
-                  row.names = TRUE, col.names = TRUE)
+                  row.names = TRUE, col.names = NA)
+      
+    }
+    else if (method == "mixed") {
+      # compute kinship
+      K <- X %*% t(X)
+      sim_file <- file.path(tmpdir_time, "similarities.txt")
+      write.table(K, sim_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = NA)
+      
     }
   }
   
@@ -140,8 +187,8 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
            paste0("--phenotypes ", pheno_file),
            paste0("--pres ", geno_file))
   
-  if (!is.null(dist_file))  cmd <- c(cmd, paste0("--distances ", dist_file))
-  if (!is.null(sim_file))   cmd <- c(cmd, paste0("--similarity ", sim_file), "--lmm")
+  if (method == "fixed") {cmd <- c(cmd, paste0("--distances ", dist_file)) }
+  if (method == "mixed") {cmd <- c(cmd, paste0("--similarity ", sim_file), "--lmm")}
   if (method == "elasticnet") cmd <- c(cmd, "--wg enet --alpha 1")
   # if (!is.null(extra_args)) cmd <- c(cmd, extra_args)
   
@@ -181,6 +228,7 @@ scoary_wrapper <- function(data, tmpdir = "scoary_temp",
                            N = 10000,
                            conda_bin,
                            scoary_env,
+                           threads = 1,
                            low.var = NULL,
                            extra_args = NULL,
                            keep_files = FALSE) {
@@ -235,7 +283,8 @@ scoary_wrapper <- function(data, tmpdir = "scoary_temp",
            paste0("-p ", 1.0),
            paste0("-c I B BH P"),
            paste0("-e ", N),
-           paste0("-s ", 2))
+           paste0("-s ", 2),
+           paste0("--threads", threads))
   
   if (!is.null(tree_file))  cmd <- c(cmd, paste0("-n ", tree_file))
   
