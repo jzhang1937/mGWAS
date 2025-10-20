@@ -284,7 +284,7 @@ scoary_wrapper <- function(data, tmpdir = "scoary_temp",
            paste0("-c I B BH P"),
            paste0("-e ", N),
            paste0("-s ", 2),
-           paste0("--threads", threads))
+           paste0("--threads ", threads))
   
   if (!is.null(tree_file))  cmd <- c(cmd, paste0("-n ", tree_file))
   
