@@ -71,8 +71,10 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
                            output = "pyseer_out.txt",
                            conda_bin,
                            pyseer_env,
+                           max_dimensions = 10,
                            phylo = FALSE,
-                           pyseer_phylo = TRUE,
+                           jaccard = FALSE,
+                           hamming = FALSE,
                            extra_args = NULL,
                            keep_files = FALSE) {
   X <- data$X
@@ -117,7 +119,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
   
   # distances / similarities from tree 
   dist_file <- sim_file <- NULL
-  if (!is.null(tree) & phylo & !pyseer_phylo) {
+  if (!is.null(tree) & phylo) {
     tr <- ape::keep.tip(tree, samples)
     
     if (method == "fixed") {
@@ -126,43 +128,49 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
       write.table(D, dist_file, sep = "\t", quote = FALSE,
                   row.names = TRUE, col.names = NA)
     } else if (method == "mixed") {
-      D <- ape::cophenetic.phylo(tr)[samples, samples]
-      sim <- exp(-D)   # similarity from distances
+      sim <- ape::vcv.phylo(tr)[samples, samples]
       sim_file <- file.path(tmpdir_time, "similarities.txt")
       write.table(sim, sim_file, sep = "\t", quote = FALSE,
                   row.names = TRUE, col.names = NA)
     } 
-  } else if (!is.null(tree) & phylo & pyseer_phylo) {
-    tree_file <- file.path(tmpdir_time, "core_genome.tree")
-    
-    # Write tree to Newick file
-    ape::write.tree(tree, file = tree_file)
-    
-    # not usable yet...
+  } else if (!phylo & jaccard) {
+    jaccard_sim <- mGWAS:::jaccard_sim(X)
     if (method == "fixed") {
-      # compute phylo distances
-      cmd_str <- paste0("python scripts/phylogeny_distance.py ", file.path(tmpdir_time, "core_genome.tree"))
-      full_cmd <- paste(conda_bin, "run -n", pyseer_env, cmd_str,
-                        paste0("> ", file.path(tmpdir_time, "distances.txt")))
+      # compute distance with jaccard
+      D <- 1 - jaccard_sim
+      dist_file <- file.path(tmpdir_time, "distances.txt")
+      write.table(D, dist_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = NA)
       
-      message("Running: ", full_cmd)
-      system(full_cmd)
     }
     else if (method == "mixed") {
-      # compute phylo distances
-      cmd_str <- paste0("python scripts/phylogeny_distance.py --lmm ", file.path(tmpdir_time, "core_genome.tree"))
-      full_cmd <- paste(conda_bin, "run -n", pyseer_env, cmd_str,
-                        paste0("> ", file.path(tmpdir_time, "similarities.txt")))
-      
-      message("Running: ", full_cmd)
-      system(full_cmd)
+      # compute similarity with jaccard
+      sim_file <- file.path(tmpdir_time, "similarities.txt")
+      write.table(jaccard_sim, sim_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = NA)
+    }
+  } else if (!phylo & hamming) {
+    G = 2 * X - 1
+    K <- tcrossprod(G)
+    K_norm <- K / ncol(G)
+    if (method == "fixed") {
+      # compute distance with hammming
+      D <- 1 - K_norm
+      dist_file <- file.path(tmpdir_time, "distances.txt")
+      write.table(D, dist_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = NA)
       
     }
-
+    else if (method == "mixed") {
+      # compute similarity with hamming
+      sim_file <- file.path(tmpdir_time, "similarities.txt")
+      write.table(K_norm, sim_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = NA)
+    }
   } else {
     if (method == "fixed") {
-      # compute kinship
-      K <- X %*% t(X)
+      # compute kinship with normalized 1 - GG^T
+      K <- tcrossprod(X)
       K_norm <- K / ncol(X)
       D <- 1 - K_norm
       # set diagonal to 0
@@ -187,7 +195,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
            paste0("--phenotypes ", pheno_file),
            paste0("--pres ", geno_file))
   
-  if (method == "fixed") {cmd <- c(cmd, paste0("--distances ", dist_file)) }
+  if (method == "fixed") {cmd <- c(cmd, paste0("--distances ", dist_file, " --max-dimensions ", max_dimensions)) }
   if (method == "mixed") {cmd <- c(cmd, paste0("--similarity ", sim_file), "--lmm")}
   if (method == "elasticnet") cmd <- c(cmd, "--wg enet --alpha 1")
   # if (!is.null(extra_args)) cmd <- c(cmd, extra_args)
