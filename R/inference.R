@@ -6,7 +6,7 @@
 #' @export
 #'
 #' @examples
-oracle_treeWAS_wrapper <- function(data, method, n.snps.sim = 10000) {
+oracle_treeWAS_wrapper <- function(data, method = c("terminal", "simultaneous", "subsequent"), n.snps.sim = 10000) {
   snps <- data$X
   phen <- data$y
   tree <- data$tree
@@ -36,12 +36,62 @@ oracle_treeWAS_wrapper <- function(data, method, n.snps.sim = 10000) {
 #' @export
 #'
 #' @examples
-treeWAS_wrapper <- function(data, method, n.snps.sim = 10000) {
+treeWAS_no_subs_wrapper <- function(data, method = c("terminal", "simultaneous", "subsequent"), n.snps.sim = 10000) {
+  snps <- data$X
+  phen <- data$y
+  tree <- data$tree
+  snps.rec <- data$X.rec
+  phen.rec <- data$y.rec
+  results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
+                                               tree = tree,
+                                               test = method,
+                                               snps.reconstruction = snps.rec,
+                                               phen.reconstruction = phen.rec,
+                                               n.snps.sim = n.snps.sim,
+                                               plot.tree = FALSE,
+                                               plot.manhattan = FALSE,
+                                               plot.null.dist = FALSE,
+                                               plot.null.dist.pairs = FALSE))
+  results$dat <- NULL
+  results
+}
+
+#' Title
+#'
+#' @param data 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+treeWAS_tree_wrapper <- function(data, method = c("terminal", "simultaneous", "subsequent"), n.snps.sim = 10000) {
   snps <- data$X
   phen <- data$y
   tree <- data$tree
   results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
                                                tree = tree,
+                                               test = method,
+                                               n.snps.sim = n.snps.sim,
+                                               plot.tree = FALSE,
+                                               plot.manhattan = FALSE,
+                                               plot.null.dist = FALSE,
+                                               plot.null.dist.pairs = FALSE))
+  results$dat <- NULL
+  results
+}
+
+#' Title
+#'
+#' @param data 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+treeWAS_wrapper <- function(data, method = c("terminal", "simultaneous", "subsequent"), n.snps.sim = 10000) {
+  snps <- data$X
+  phen <- data$y
+  results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
                                                test = method,
                                                n.snps.sim = n.snps.sim,
                                                plot.tree = FALSE,

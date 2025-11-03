@@ -135,6 +135,13 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     sign <- y_given_X_hyperparams$sign[1:p]
   }
   
+  # check intercept
+  if (is.null(y_given_X_hyperparams$intercept)) {
+    intercept <- 0
+  } else {
+    intercept <- y_given_X_hyperparams$intercept
+  }
+  
   # generate y's.
   if (y_given_X == "linear") {
     beta <- amplitude * (1:p %in% ground_truth$nonnulls) * sign
@@ -142,8 +149,8 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
       X.rec <- X
     }
     y.rec <- katlabutils::generate_glm_response_data(
-      X.rec,
-      beta,
+      cbind(1, X.rec),
+      c(intercept, beta),
       family
     )
     y <- y.rec[1:n]
