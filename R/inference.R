@@ -10,15 +10,11 @@ oracle_treeWAS_wrapper <- function(data, method = c("terminal", "simultaneous", 
   snps <- data$X
   phen <- data$y
   tree <- data$tree
-  snps.rec <- data$X.rec
-  phen.rec <- data$y.rec
   n.mts <- data$n.mts
   n.subs <- as.vector(table(data$n.mts))
   results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
                                                tree = tree, n.subs = n.subs,
                                                test = method,
-                                               snps.reconstruction = snps.rec,
-                                               phen.reconstruction = phen.rec,
                                                n.snps.sim = n.snps.sim,
                                                plot.tree = FALSE,
                                                plot.manhattan = FALSE,
@@ -40,13 +36,9 @@ treeWAS_no_subs_wrapper <- function(data, method = c("terminal", "simultaneous",
   snps <- data$X
   phen <- data$y
   tree <- data$tree
-  snps.rec <- data$X.rec
-  phen.rec <- data$y.rec
   results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
                                                tree = tree,
                                                test = method,
-                                               snps.reconstruction = snps.rec,
-                                               phen.reconstruction = phen.rec,
                                                n.snps.sim = n.snps.sim,
                                                plot.tree = FALSE,
                                                plot.manhattan = FALSE,
@@ -439,3 +431,171 @@ hogwash_wrapper <- function(data, method = "synchronous") {
   }
   
 }
+
+#' Title
+#'
+#' @param data 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+one_match <- function(data, dist = "phylo", D = NA, cutoff = 1) {
+  snps <- data$X
+  phen <- data$y
+  binary <- all(y %in% c(0, 1))
+  tree <- data$tree
+  if (is.na(D)) {
+    if (dist == "phylo") {
+      
+    } else if (dist == "hamming") {
+      
+    } else if (dist == "jaccard") {
+      
+    }
+  }
+  
+  
+}
+
+#' Title
+#'
+#' @param data 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+minor_match <- function(data, method = "synchronous") {
+  snps <- data$X
+  phen <- data$y
+  binary <- all(y %in% c(0, 1))
+  tree <- data$tree
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+  # match names
+  snps <- snps[tree$tip.label, , drop = FALSE]
+  phen <- phen[tree$tip.label]
+  # create directory if it doesn't exist
+  if (!dir.exists("hogwash")) {
+    dir.create("hogwash", recursive = TRUE)
+  }
+  # make labels
+  tree$node.label <- rep(100, tree$Nnode)
+  
+  if (method == "synchronous") {
+    # run hogwash
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1,
+                     test = "synchronous")
+    load(paste0("hogwash/hogwash_synchronous_", timestamp, ".rda"))
+    synchronous <- hogwash_synchronous
+    return(synchronous)
+  } else if (method == "phyc") {
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1,
+                     test = "phyc")
+    load(paste0("hogwash/hogwash_phyc_", timestamp, ".rda"))
+    phyc <- hogwash_phyc
+    unlink(paste0("hogwash/hogwash_phyc_", timestamp, "*"), recursive = TRUE)
+    return(phyc)
+  } else {
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1)
+    load(paste0("hogwash/hogwash_continuous_", timestamp, ".rda"))
+    continuous <- hogwash_continuous
+    unlink(paste0("hogwash/hogwash_continuous_", timestamp, "*"), recursive = TRUE)
+    return(continuous)
+  }
+  
+}
+
+#' Title
+#'
+#' @param data 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+full_match <- function(data, method = "synchronous") {
+  snps <- data$X
+  phen <- data$y
+  binary <- all(y %in% c(0, 1))
+  tree <- data$tree
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+  # match names
+  snps <- snps[tree$tip.label, , drop = FALSE]
+  phen <- phen[tree$tip.label]
+  # create directory if it doesn't exist
+  if (!dir.exists("hogwash")) {
+    dir.create("hogwash", recursive = TRUE)
+  }
+  # make labels
+  tree$node.label <- rep(100, tree$Nnode)
+  
+  if (method == "synchronous") {
+    # run hogwash
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1,
+                     test = "synchronous")
+    load(paste0("hogwash/hogwash_synchronous_", timestamp, ".rda"))
+    synchronous <- hogwash_synchronous
+    return(synchronous)
+  } else if (method == "phyc") {
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1,
+                     test = "phyc")
+    load(paste0("hogwash/hogwash_phyc_", timestamp, ".rda"))
+    phyc <- hogwash_phyc
+    unlink(paste0("hogwash/hogwash_phyc_", timestamp, "*"), recursive = TRUE)
+    return(phyc)
+  } else {
+    hogwash::hogwash(pheno = as.matrix(phen), 
+                     geno = as.matrix(snps),  
+                     tree = tree,      
+                     file_name = timestamp,
+                     dir = "hogwash",
+                     perm = 10000,
+                     bootstrap = 0.3,
+                     fdr = 0.1)
+    load(paste0("hogwash/hogwash_continuous_", timestamp, ".rda"))
+    continuous <- hogwash_continuous
+    unlink(paste0("hogwash/hogwash_continuous_", timestamp, "*"), recursive = TRUE)
+    return(continuous)
+  }
+  
+}
+
+
+
+

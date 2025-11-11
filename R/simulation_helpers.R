@@ -144,16 +144,31 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
   
   # generate y's.
   if (y_given_X == "linear") {
-    beta <- amplitude * (1:p %in% ground_truth$nonnulls) * sign
-    if (is.null(X.rec)) {
-      X.rec <- X
+    if (s == 0) {
+      if (joint_X == "treeWAS_mGWAS") {
+        # generate phen.sim according to tree and default params p times and take average
+        phens <- mGWAS:::draw_continuous_global_null(tree, 5)
+        noise <- rnorm(nrow(X.rec), 0, 0.5)
+        y.rec <- phens$phen.nodes.sum + noise
+        y <- phens$phen.sum + noise[1:n]
+        
+      } else {
+        # draw y
+        y.rec <- rnorm(nrow(X.rec))
+        y <- y.rec[1:n]
+      }
+    } else {
+      beta <- amplitude * (1:p %in% ground_truth$nonnulls) * sign
+      if (is.null(X.rec)) {
+        X.rec <- X
+      }
+      y.rec <- katlabutils::generate_glm_response_data(
+        cbind(1, X.rec),
+        c(intercept, beta),
+        family
+      )
+      y <- y.rec[1:n]
     }
-    y.rec <- katlabutils::generate_glm_response_data(
-      cbind(1, X.rec),
-      c(intercept, beta),
-      family
-    )
-    y <- y.rec[1:n]
     names(y) <- rownames(X)
   } else if (y_given_X == "gam") {
     beta <- amplitude * (1:p %in% ground_truth$nonnulls) * sign
@@ -225,11 +240,15 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
       order <- y_given_X_hyperparams$order
     }
     if (s == 0) {
-      # No causal variants — make random Bernoulli vector
-      transformed_X <- rbinom(n = nrow(X.rec), size = 1, prob = 0.5)
-      # draw y
-      y.rec <- as.integer(transformed_X >= 0.5)
-      y <- y.rec[1:n]
+      if (joint_X == "treeWAS_mGWAS") {
+        # do nothing; keep the phenotype simulated from treeWAS
+      } else {
+        # No causal variants — make random Bernoulli vector
+        transformed_X <- rbinom(n = nrow(X.rec), size = 1, prob = 0.5)
+        # draw y
+        y.rec <- as.integer(transformed_X >= 0.5)
+        y <- y.rec[1:n]
+      }
     } else {
       # Use actual subset, ensuring matrix shape
       X_subset <- X.rec[, ground_truth$nonnulls, drop = FALSE]
@@ -238,7 +257,6 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
       y.rec <- as.integer(transformed_X >= order * s)
       y <- y.rec[1:n]
     }
-    
     names(y) <- rownames(X)
   }
   
@@ -290,6 +308,38 @@ find_low_variance <- function(X, thresholds) {
   
   return(result)
 }
+
+draw_continuous_global_null <- function(tree, p) {
+  ## helper to convert to numeric efficiently
+  to_numeric <- function(x) {
+    if (is.numeric(x)) return(x)
+    if (Hmisc::all.is.numeric(x)) return(as.numeric(as.character(x)))
+    as.numeric(as.factor(x))
+  }
+  
+  ## run one simulation to initialize
+  phen.sim <- treeWAS::phen.sim(tree, n.subs = 15, grp.min = 0.25)
+  phen <- to_numeric(phen.sim$phen)
+  phen.nodes <- to_numeric(phen.sim$phen.nodes)
+  
+  ## initialize sums
+  phen.sum <- phen
+  phen.nodes.sum <- phen.nodes
+  
+  ## repeat (p - 1) times
+  for (i in 2:p) {
+    phen.sim <- treeWAS::phen.sim(tree, n.subs = 15, grp.min = 0.25)
+    phen.sum <- phen.sum + to_numeric(phen.sim$phen)
+    phen.nodes.sum <- phen.nodes.sum + to_numeric(phen.sim$phen.nodes)
+  }
+  
+  ## return averages only
+  list(
+    phen.sum = phen.sum,
+    phen.nodes.sum = phen.nodes.sum
+  )
+}
+
 
 
 
