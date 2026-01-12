@@ -117,6 +117,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
                            phylo = FALSE,
                            jaccard = FALSE,
                            hamming = FALSE,
+                           normalized = FALSE,
                            extra_args = NULL,
                            keep_files = FALSE) {
   X <- data$X
@@ -208,6 +209,36 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
       sim_file <- file.path(tmpdir_time, "similarities.txt")
       write.table(K_norm, sim_file, sep = "\t", quote = FALSE,
                   row.names = TRUE, col.names = NA)
+    }
+  } else if (!phylo & normalized) {
+    # Allele frequencies
+    freq <- colMeans(X, na.rm = TRUE) / 2
+    # Center and scale
+    Z <- sweep(X, 2, freq, "-")
+    Z <- sweep(X, 2, sqrt(freq * (1 - freq)), "/")
+    
+    # Drop degenerate columns
+    keep <- is.finite(colSums(Z))
+    Z <- Z[, keep, drop = FALSE]
+    
+    # GRM
+    K <- tcrossprod(Z) / ncol(Z)
+    
+    if (method == "fixed") {
+      # compute kinship with normalized 1 - GG^T
+      D2 <- outer(diag(K), diag(K), "+") - 2 * K
+      D  <- sqrt(pmax(D2, 0))   # numerical safety
+      dist_file <- file.path(tmpdir_time, "distances.txt")
+      write.table(D, dist_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = NA)
+      
+    }
+    else if (method == "mixed") {
+      # compute kinship
+      sim_file <- file.path(tmpdir_time, "similarities.txt")
+      write.table(K, sim_file, sep = "\t", quote = FALSE,
+                  row.names = TRUE, col.names = NA)
+      
     }
   } else {
     if (method == "fixed") {
@@ -595,6 +626,147 @@ full_match <- function(data, method = "synchronous") {
   }
   
 }
+
+#' Title
+#'
+#' @param y binary phenotype
+#' @param X genetic features matrix
+#' @param covar 
+#' @param verbose 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+gmmat_binary <- function(data, covar = NULL, 
+                             phylo = FALSE,
+                             jaccard = FALSE,
+                             hamming = FALSE,
+                             normalized = FALSE,
+                             tmpdir = "gmmat_temp",  
+                             output = "gmmat_out.txt") {
+  X <- data$X
+  y <- data$y
+  tree <- data$tree
+  
+  stopifnot(length(y) == nrow(X))
+  
+  n <- length(y)
+  p <- ncol(X)
+  
+  # sample names standard
+  if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
+  if (is.null(names(y))) names(y) <- rownames(X)
+  if (!all(names(y) %in% rownames(X))) {
+    stop("Sample names in y must match rownames of X")
+  }
+  
+  samples <- names(y)
+  
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+  
+  # make sure temp directory exists
+  if (!dir.exists(tmpdir)) {
+    dir.create(tmpdir, recursive = TRUE)
+  }
+  tmpdir_time <- file.path(tmpdir, timestamp)
+  dir.create(tmpdir_time, recursive = TRUE)
+  
+  # Make data frame
+  dat <- data.frame(
+    id = seq_len(n),
+    y = as.numeric(y)
+  )
+  
+  if (!is.null(covar)) {
+    covar <- as.data.frame(covar)
+    dat <- cbind(dat, covar)
+  }
+  
+  # Compute similarity K
+  if (!is.null(tree) & phylo) {
+    tr <- ape::keep.tip(tree, samples)
+    K <- ape::vcv.phylo(tr)[samples, samples]
+  } else if (!phylo & jaccard) {
+    K <- mGWAS:::jaccard_sim(X)
+  } else if (!phylo & hamming) {
+    G = 2 * X - 1
+    K_raw <- tcrossprod(G)
+    K <- K_raw / ncol(G)
+  } else if (!phylo & normalized) {
+    # Allele frequencies
+    freq <- colMeans(X, na.rm = TRUE) / 2
+    # Center and scale
+    Z <- sweep(X, 2, freq, "-")
+    Z <- sweep(X, 2, sqrt(freq * (1 - freq)), "/")
+    
+    # Drop degenerate columns
+    keep <- is.finite(colSums(Z))
+    Z <- Z[, keep, drop = FALSE]
+    
+    # GRM
+    K <- tcrossprod(Z) / ncol(Z)
+    
+  } else {
+    K <- tcrossprod(X)
+  }
+  
+  rownames(K) <- colnames(K) <- dat$id
+  
+  # make genotype file
+  geno_file <- file.path(tmpdir_time, "genotypes.txt")
+  
+  # Transpose so rows = variants, columns = samples
+  mat <- t(X[samples, , drop = FALSE])  
+  
+  # Make a data.frame, optional to add a variant identifier column
+  geno_out <- data.frame(
+    variant = rownames(mat),  # optional, can be first column to label variants
+    mat,
+    check.names = FALSE
+  )
+  
+  write.table(
+    geno_out,
+    file = geno_file,
+    sep = "\t",
+    quote = FALSE,
+    row.names = FALSE,
+    col.names = TRUE
+  )
+  
+  # Fit null logistic mixed model
+  fixed <- if (is.null(covar)) {
+    y ~ 1
+  } else {
+    reformulate(colnames(covar), response = "y")
+  }
+  
+  message("Fitting null model...")
+  nullmod <- GMMAT::glmmkin(
+    fixed = fixed,
+    data = dat,
+    kins = list(K),
+    id = "id",
+    family = binomial(link = "logit")
+  )
+  
+  # Score test for each variant
+  message("Running score tests...")
+  res <- GMMAT::glmm.score(
+    nullmod,
+    infile = geno_file,
+    outfile = file.path(tmpdir_time, output)
+  )
+  
+  results <- read.table(file.path(tmpdir_time, output), header = TRUE)
+  results <- results[-1, ]
+  
+  # remove files
+  unlink(file.path(tmpdir_time), recursive = TRUE)
+  return(results)
+}
+
 
 
 

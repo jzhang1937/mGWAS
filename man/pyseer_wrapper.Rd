@@ -15,6 +15,7 @@ pyseer_wrapper(
   phylo = FALSE,
   jaccard = FALSE,
   hamming = FALSE,
+  normalized = FALSE,
   extra_args = NULL,
   keep_files = FALSE
 )
