@@ -215,7 +215,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
     freq <- colMeans(X, na.rm = TRUE) / 2
     # Center and scale
     Z <- sweep(X, 2, freq, "-")
-    Z <- sweep(X, 2, sqrt(freq * (1 - freq)), "/")
+    Z <- sweep(Z, 2, sqrt(freq * (1 - freq)), "/")
     
     # Drop degenerate columns
     keep <- is.finite(colSums(Z))
@@ -698,7 +698,7 @@ gmmat_binary <- function(data, covar = NULL,
     freq <- colMeans(X, na.rm = TRUE) / 2
     # Center and scale
     Z <- sweep(X, 2, freq, "-")
-    Z <- sweep(X, 2, sqrt(freq * (1 - freq)), "/")
+    Z <- sweep(Z, 2, sqrt(freq * (1 - freq)), "/")
     
     # Drop degenerate columns
     keep <- is.finite(colSums(Z))
