@@ -11,7 +11,15 @@ treeWAS_wrapper(
 )
 }
 \arguments{
-\item{data}{}
+\item{data}{a list object that contains an X matrix, y vector, phylogenetic tree (optional).
+The rownames of X and names of y should align, and be a subset of tree$tip.label if tree is supplied.}
+
+\item{method}{vector of scores to compute in treeWAS}
+
+\item{n.snps.sim}{number of samples to use}
+}
+\value{
+list object with corrected treeWAS p-values
 }
 \description{
 Title

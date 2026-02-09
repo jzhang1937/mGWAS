@@ -16,13 +16,25 @@ gmmat_binary(
 )
 }
 \arguments{
-\item{covar}{}
+\item{data}{a list object that contains an X matrix, y vector, phylogenetic tree (optional).
+The rownames of X and names of y should align, and be a subset of tree$tip.label if tree is supplied.}
 
-\item{y}{binary phenotype}
+\item{covar}{covariate matrix.}
 
-\item{X}{genetic features matrix}
+\item{phylo}{whether to use tree similarity/distance (tree must be provided).}
 
-\item{verbose}{}
+\item{jaccard}{whether to use jaccard similarity/distance.}
+
+\item{hamming}{whether to use hamming similarity/distance.}
+
+\item{normalized}{whether to use a normalized XX^T similarity/distance.}
+
+\item{tmpdir}{path to temp directory to store output}
+
+\item{output}{name of output file.}
+}
+\value{
+GMMAT results output
 }
 \description{
 Title

@@ -11,7 +11,15 @@ oracle_treeWAS_wrapper(
 )
 }
 \arguments{
-\item{data}{}
+\item{data}{a list object that contains an X matrix, y vector, phylogenetic tree,
+and a number of mutations vector n.mts.}
+
+\item{method}{vector of scores to compute in treeWAS}
+
+\item{n.snps.sim}{number of samples to use}
+}
+\value{
+output from treeWAS
 }
 \description{
 Title

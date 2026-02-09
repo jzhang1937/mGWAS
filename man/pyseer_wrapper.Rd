@@ -21,21 +21,35 @@ pyseer_wrapper(
 )
 }
 \arguments{
-\item{data}{}
+\item{data}{a list object that contains an X matrix, y vector, phylogenetic tree (optional).
+The rownames of X and names of y should align, and be a subset of tree$tip.label if tree is supplied.}
 
-\item{method}{}
+\item{method}{"fixed" or "mixed", no default.}
 
-\item{tmpdir}{}
+\item{tmpdir}{a path to directory to put temporary files.}
 
-\item{output}{}
+\item{output}{name of output file.}
 
-\item{conda_bin}{}
+\item{conda_bin}{path to the conda executable}
 
-\item{pyseer_env}{}
+\item{pyseer_env}{name of conda environment}
+
+\item{max_dimensions}{if using method = "fixed", how many MDS dimensions to use.}
+
+\item{phylo}{whether to use tree similarity/distance (tree must be provided).}
+
+\item{jaccard}{whether to use jaccard similarity/distance.}
+
+\item{hamming}{whether to use hamming similarity/distance.}
+
+\item{normalized}{whether to use a normalized XX^T similarity/distance.}
 
 \item{extra_args}{}
 
-\item{keep_files}{}
+\item{keep_files}{whether to keep the temp files, default FALSE.}
+}
+\value{
+pyseer results output
 }
 \description{
 Title

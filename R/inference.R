@@ -1,8 +1,11 @@
 #' Title
 #'
-#' @param data 
+#' @param data a list object that contains an X matrix, y vector, phylogenetic tree,
+#' and a number of mutations vector n.mts.
+#' @param method vector of scores to compute in treeWAS
+#' @param n.snps.sim number of samples to use
 #'
-#' @returns
+#' @returns output from treeWAS
 #' @export
 #'
 #' @examples
@@ -26,33 +29,12 @@ oracle_treeWAS_wrapper <- function(data, method = c("terminal", "simultaneous", 
 
 #' Title
 #'
-#' @param data 
+#' @param data a list object that contains an X matrix, y vector, phylogenetic tree.
+#' The rownames of X and names of y should align, and be a subset of tree$tip.label
+#' @param method vector of scores to compute in treeWAS
+#' @param n.snps.sim number of samples to use
 #'
-#' @returns
-#' @export
-#'
-#' @examples
-treeWAS_no_subs_wrapper <- function(data, method = c("terminal", "simultaneous", "subsequent"), n.snps.sim = 10000) {
-  snps <- data$X
-  phen <- data$y
-  tree <- data$tree
-  results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
-                                               tree = tree,
-                                               test = method,
-                                               n.snps.sim = n.snps.sim,
-                                               plot.tree = FALSE,
-                                               plot.manhattan = FALSE,
-                                               plot.null.dist = FALSE,
-                                               plot.null.dist.pairs = FALSE))
-  results$dat <- NULL
-  results
-}
-
-#' Title
-#'
-#' @param data 
-#'
-#' @returns
+#' @returns output from treeWAS
 #' @export
 #'
 #' @examples
@@ -74,38 +56,60 @@ treeWAS_tree_wrapper <- function(data, method = c("terminal", "simultaneous", "s
 
 #' Title
 #'
-#' @param data 
+#' @param data a list object that contains an X matrix, y vector, phylogenetic tree (optional). 
+#' The rownames of X and names of y should align, and be a subset of tree$tip.label if tree is supplied.
+#' @param method vector of scores to compute in treeWAS
+#' @param n.snps.sim number of samples to use
 #'
-#' @returns
+#' @returns list object with corrected treeWAS p-values
 #' @export
 #'
 #' @examples
 treeWAS_wrapper <- function(data, method = c("terminal", "simultaneous", "subsequent"), n.snps.sim = 10000) {
   snps <- data$X
   phen <- data$y
-  results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
-                                               test = method,
-                                               n.snps.sim = n.snps.sim,
-                                               plot.tree = FALSE,
-                                               plot.manhattan = FALSE,
-                                               plot.null.dist = FALSE,
-                                               plot.null.dist.pairs = FALSE))
+  tree <- data$tree
+  if (is.null(tree)) {
+    results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
+                                                 test = method,
+                                                 n.snps.sim = n.snps.sim,
+                                                 plot.tree = FALSE,
+                                                 plot.manhattan = FALSE,
+                                                 plot.null.dist = FALSE,
+                                                 plot.null.dist.pairs = FALSE))
+  } else {
+    tree_pruned <- tree_prune(tree, names(phen))
+    results <- suppressWarnings(treeWAS::treeWAS(snps = snps, phen = phen,
+                                                 tree = tree,
+                                                 test = method,
+                                                 n.snps.sim = n.snps.sim,
+                                                 plot.tree = FALSE,
+                                                 plot.manhattan = FALSE,
+                                                 plot.null.dist = FALSE,
+                                                 plot.null.dist.pairs = FALSE))
+  }
   results$dat <- NULL
-  results
+  process_treeWAS(results)
 }
 
 #' Title
 #'
-#' @param data 
-#' @param method 
-#' @param tmpdir 
-#' @param output 
-#' @param conda_bin 
-#' @param pyseer_env 
+#' @param data a list object that contains an X matrix, y vector, phylogenetic tree (optional). 
+#' The rownames of X and names of y should align, and be a subset of tree$tip.label if tree is supplied.
+#' @param method "fixed" or "mixed", no default.
+#' @param tmpdir a path to directory to put temporary files.
+#' @param output name of output file.
+#' @param conda_bin path to the conda executable
+#' @param pyseer_env name of conda environment
 #' @param extra_args 
-#' @param keep_files 
+#' @param keep_files whether to keep the temp files, default FALSE.
+#' @param max_dimensions if using method = "fixed", how many MDS dimensions to use.
+#' @param phylo whether to use tree similarity/distance (tree must be provided).
+#' @param jaccard whether to use jaccard similarity/distance.
+#' @param hamming whether to use hamming similarity/distance.
+#' @param normalized whether to use a normalized XX^T similarity/distance.
 #'
-#' @returns
+#' @returns pyseer results output
 #' @export
 #'
 #' @examples
@@ -627,14 +631,19 @@ full_match <- function(data, method = "synchronous") {
   
 }
 
-#' Title
+#' Title 
 #'
-#' @param y binary phenotype
-#' @param X genetic features matrix
-#' @param covar 
-#' @param verbose 
+#' @param data a list object that contains an X matrix, y vector, phylogenetic tree (optional). 
+#' The rownames of X and names of y should align, and be a subset of tree$tip.label if tree is supplied.
+#' @param phylo whether to use tree similarity/distance (tree must be provided).
+#' @param jaccard whether to use jaccard similarity/distance.
+#' @param hamming whether to use hamming similarity/distance.
+#' @param normalized whether to use a normalized XX^T similarity/distance.
+#' @param tmpdir path to temp directory to store output
+#' @param output name of output file.
+#' @param covar covariate matrix.
 #'
-#' @returns
+#' @returns GMMAT results output
 #' @export
 #'
 #' @examples

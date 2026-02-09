@@ -11,7 +11,15 @@ treeWAS_tree_wrapper(
 )
 }
 \arguments{
-\item{data}{}
+\item{data}{a list object that contains an X matrix, y vector, phylogenetic tree.
+The rownames of X and names of y should align, and be a subset of tree$tip.label}
+
+\item{method}{vector of scores to compute in treeWAS}
+
+\item{n.snps.sim}{number of samples to use}
+}
+\value{
+output from treeWAS
 }
 \description{
 Title

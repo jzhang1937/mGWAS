@@ -48,7 +48,7 @@ generate_data_treeWAS_mod <- function(n.ind, n.snps, n.snps.assoc, assoc.prob = 
 #' @param amplitude 
 #' @param ground_truth 
 #'
-#' @returns
+#' @returns a list that includes an X matrix, y vector, and any other relevant objects (such as a tree) or information
 #' @export
 #'
 #' @examples

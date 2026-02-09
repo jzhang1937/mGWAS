@@ -35,6 +35,9 @@ generate_data(
 
 \item{ground_truth}{}
 }
+\value{
+a list that includes an X matrix, y vector, and any other relevant objects (such as a tree) or information
+}
 \description{
 Title
 }
