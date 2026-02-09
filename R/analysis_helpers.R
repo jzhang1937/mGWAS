@@ -65,6 +65,7 @@ process_treeWAS <- function(treeWAS_object) {
 raw_treeWAS <- function(treeWAS_object) {
   scores <- c("terminal", "simultaneous", "subsequent")
   results <- vector(mode = "list", length(scores))
+  names(results) <- scores
   for (score in scores) {
     tree_result <- treeWAS_object[[score]]
     p.vals <- tree_result$p.vals
