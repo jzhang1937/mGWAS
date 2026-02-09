@@ -39,6 +39,7 @@ tree_prune <- function(tree, labels) {
 process_treeWAS <- function(treeWAS_object) {
   scores <- c("terminal", "simultaneous", "subsequent")
   results <- vector(mode = "list", length(scores))
+  names(results) <- scores
   for (score in scores) {
     tree_result <- treeWAS_object[[score]]
     # Sort absolute values
