@@ -776,7 +776,148 @@ gmmat_binary <- function(data, covar = NULL,
   return(results)
 }
 
+#' GCM doubly robust variable selection function
+#'
+#' @param data A list with an n x p data matrix X and n x 1 vector y
+#' @param fit_X A function that inputs X and outputs a function
+#' that inputs X, j, B and outputs B conditional resamples of
+#' variable j.
+#' @param fit_y_given_X A function that inputs X and y and family and
+#' outputs a function that inputs X and outputs the fitted
+#' E(y|X)
+#' @param family A string specifying the exponential family, e.g. "gaussian", "bernoulli"
+#' @param K The number of folds for crossfitting
+#' @param B The number of resamples
+#' @param linear whether the fit_y_given_X is linear in X
+#' @param multiple_correction How to adjust the p values for multiplicity.
+#' @param seed Seed to set for data split and fits of Y|X and X
+#' @param alpha Desired FDP level.
+#'
+#' @return A list of p p-values, one for each variable
+#' @export
+tower_gcm <- function(data, fit_X, fit_y_given_X, 
+                     K = 5, alpha = 0.1,
+                     multiple_correction = "BH", seed = 1234){
+  # Extract the data.
+  X <- data$X
+  y <- data$y
+  
+  # number of samples and predictors
+  n <- nrow(X)
+  p <- ncol(X)
+  
+  # Create K roughly equally size folds
+  folds <- sample(x = 1:K, size = n, replace = TRUE) |>
+    R.utils::withSeed(seed = seed)
+  
+  # Matrix of product of residuals across folds
+  product_residuals <- matrix(0,nrow = n, ncol = p)
+  
+  
+  #Perform K-fold cross-fitting
+  for(k in 1:K){
+    print(paste0("Fitting Nuisance Fold ", k))
+    # Segment data by fold using the which() function
+    evalIndexes <- which(folds==k,arr.ind=TRUE)
+    # evaluation data
+    evalDataX <- X[evalIndexes, ]
+    evalDataY <- y[evalIndexes]
+    # nuisance training data
+    if (K > 1) {
+      nuisDataX <- X[-evalIndexes, ]
+      nuisDataY <- y[-evalIndexes]
+    } else if (K == 1) {
+      nuisDataX <- evalDataX
+      nuisDataY <- evalDataY
+    }
+    
+    # Concatenate all of the training data
+    data_nuis <- list(X = nuisDataX, y = nuisDataY)
+    
+    # number of evaluation samples
+    nk <- length(evalDataY)
+    
+    # y given X fit
+    y_given_X_hat <- fit_y_given_X(data_nuis) |>
+      R.utils::withSeed(seed = seed)
+    
+    # X fit
+    X_hat <- fit_X(data_nuis) |>
+      R.utils::withSeed(seed = seed)
+    
+    # print update
+    print(paste0("Fitting Nuisance Complete, Fold: ", k))
+    
+    # Iterate over each predictor variable
+    cat(sprintf("Running association test for each variable...\n"))
+    # Iterate over each predictor variable
+    for (j in 1:p) {
 
+      # compute E[eta^hat_j(evalDataX)|X_-j]
+      cond_mean_xj <- X_hat$conditional_mean(j, evalDataX)
+      # round to be between 0 and 1
+      cond_probs_xj <- pmin(pmax(cond_mean_xj, 0), 1)
+      condProbs <- cbind(as.vector(1 - cond_probs_xj), as.vector(cond_probs_xj))
+      
+      evalDataX0j <- evalDataX
+      evalDataX0j[,j] <- 0
+      evalDataX1j <- evalDataX
+      evalDataX1j[,j] <- 1
+      
+      # 3) Compute f(X) for each slice (dimension 3)
+      possible_y_X <- cbind(y_given_X_hat(evalDataX0j), y_given_X_hat(evalDataX1j))
+      
+      # Compute the conditional mean (length n vector)
+      cond_mean_yj <- rowSums(possible_y_X * condProbs)  # (n x num_obs) * (n x num_obs) → sum along num_obs → (n)
+      
+      # compute the contribution to the test statistic for all subjects from
+      # the current evaluation fold. (X_j - E(X_j|X_-j))(Y - E(Y - E(Y|X_-j)))
+      product_residuals[evalIndexes,j] <- (evalDataX[,j] - cond_mean_xj) *
+        (evalDataY - cond_mean_yj)
+      
+    }
+    
+  }
+  # standard deviation estimator
+  sd_hat = apply(X = product_residuals, MARGIN = 2, FUN = stats::sd)
+  
+  # calculate test statistics and p-values.
+  test_stats <- colSums(product_residuals)/(sqrt(n)*sd_hat)
+  test_stats[is.na(test_stats)] <- 0
+  test_stats[abs(colMeans(product_residuals)) < .Machine$double.eps] <- 0
+  p_values <- 2*(1-stats::pnorm(abs(test_stats))) # two-sided p-value
+  #stats::pnorm(test_stats, lower.tail = FALSE)  one-sided p-value
+  
+  cat(sprintf("Done.\n"))
+  
+  # multiple testing correction
+  p_methods <- c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr", "none")
+  if (multiple_correction %in% p_methods) {
+    p_values_correction <- stats::p.adjust(p_values, multiple_correction)
+    selected <- unname(which(p_values_correction < alpha))
+  } else {
+    selected = which(p_values < alpha)
+  } # will add more options later.
+  
+  # return
+  return(list(p_values = p_values, nonnulls = selected))
+  
+}
+
+#' Title
+#'
+#' @param data 
+#' @param fit_X 
+#' @param fit_y_given_X 
+#' @param family 
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+spaVS <- function(data, fit_X, fit_y_given_X, family = "binomial") {
+  
+}
 
 
 
