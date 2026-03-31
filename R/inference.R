@@ -906,203 +906,6 @@ tower_gcm <- function(data, fit_X, fit_y_given_X,
 
 #' Title
 #'
-#' @param data 
-#' @param fit_X 
-#' @param fit_y_given_X 
-#' @param family 
-#'
-#' @returns
-#' @export
-#'
-#' @examples
-spaVS <- function(data, fit_X, fit_y_given_X, family = "binomial") {
-  
-}
-
-
-
-
-#' Title
-#'
-#' @param data a list containing a vector of outcomes y and data matrix X.
-#' @param L number of modeled causal effects
-#' @param V precomputed p x p matrix of eigenvectors of X'X
-#' @param Dsq precomputed length-p vector of eigenvalues of X'X
-#' @param est_ssq estimate prior effect size variances s^2 using MLE
-#' @param ssq length-L initialization s^2 for each effect Default: 0.2 for every effect
-#' @param ssq_range lower and upper bounds for each s^2, if estimated
-#' @param pi0 length-p vector of prior causal probability for each SNP; must sum to 1 Default: 1/p for every SNP
-#' @param est_sigmasq estimate variance sigma^2
-#' @param est_tausq estimate both variances sigma^2 and tau^2
-#' @param sigmasq initial value for sigma^2
-#' @param tausq initial value for tau^2
-#' @param method one of {'moments','MLE'} (sigma^2,tau^2) are estimated using method-of-moments or MLE
-#' @param sigmasq_range lower and upper bounds for sigma^2, if estimated using MLE 
-#' @param tausq_range lower and upper bounds for tau^2
-#' @param PIP p x L initializations of PIPs Default: 1/#SNPs for each SNP and effect
-#' @param mu p x L initializations of mu; Default: 0 for each SNP and effect
-#' @param maxiter maximum number of SuSiE iterations
-#' @param PIP_tol convergence threshold for PIP difference between iterations
-#' @param verbose 
-#'
-#' @returns List containing PIP -- p x L matrix of PIPs, individually for each effect mu -- p x L matrix of posterior means conditional on causal omega -- p x L matrix of posterior precisions conditional on causal lbf -- length-L array of log-Bayes-factor for each effect lbf_variable -- p x L matrix of per-variable log-Bayes-factors ssq -- length-L array of final effect size variances s^2 sigmasq -- final value of sigma^2 tausq -- final value of tau^2 alpha -- length-p array of posterior means of infinitesimal effects
-#' @export
-#'
-#' @examples
-susieinf <- function(data, L, V = NULL, Dsq = NULL,
-                    est_ssq = TRUE, ssq = NULL, ssq_range = c(0,1), pi0 = NULL,
-                    est_sigmasq = TRUE, est_tausq = TRUE,
-                    sigmasq = 1, tausq = 0,
-                    method = "moments",
-                    sigmasq_range = NULL, tausq_range = NULL,
-                    PIP = NULL, mu = NULL,
-                    maxiter = 100, PIP_tol = 1e-3, verbose = TRUE) {
-  y <- data$y
-  y <- y - mean(y)
-  X <- data$X
-  # center columns
-  X <- sweep(X, 2, colMeans(X), "-")
-  col_sd <- sqrt(colMeans(X^2))   
-  X <- sweep(X, 2, col_sd, "/")
-  n <- nrow(X); p <- ncol(X)
-  
-  # sample names standard
-  if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
-  if (is.null(names(y))) names(y) <- rownames(X)
-  if (!all(names(y) %in% rownames(X))) {
-    stop("Sample names in y must match rownames of X")
-  }
-  
-  samples <- names(y)
-  variants <- colnames(X)
-  
-  # LD matrix
-  LD <- crossprod(X) / n
-  # z <- t(X) %*% y / sqrt(n)
-  z <- as.vector(crossprod(X, y) / sqrt(n))
-  meansq <- sum(y^2) / n
-  
-  if ((is.null(V) || is.null(Dsq)) && is.null(LD))
-    stop("Missing LD")
-  
-  if (is.null(V) || is.null(Dsq)) {
-    eig <- eigen(LD, symmetric = TRUE)
-    V <- eig$vectors
-    Dsq <- pmax(n * eig$values, 0)
-  } else {
-    Dsq <- pmax(Dsq, 0)
-  }
-  
-  Xty <- sqrt(n) * z
-  VtXty <- crossprod(V, Xty)
-  yty <- n * meansq
-  
-  var <- tausq * Dsq + sigmasq
-  # diagXtOmegaX <- colSums(V^2 * (Dsq / var))
-  diagXtOmegaX <- colSums(t(V^2) * (Dsq / var))
-  XtOmegay <- as.vector(V %*% (VtXty / var))
-  
-  if (is.null(ssq)) ssq <- rep(0.2, L)
-  if (is.null(PIP)) PIP <- matrix(1/p, p, L)
-  if (is.null(mu)) mu <- matrix(0, p, L)
-  
-  lbf_variable <- matrix(0, p, L)
-  lbf <- numeric(L)
-  omega <- matrix(0, nrow = p, ncol = L)
-  omega <- diagXtOmegaX + matrix(1 / ssq, nrow = p, ncol = L, byrow = TRUE)
-  # omega <- diagXtOmegaX + 1 / ssq
-  
-  logpi0 <- if (is.null(pi0)) rep(log(1/p), p) else {
-    out <- rep(-Inf, p)
-    out[pi0 > 0] <- log(pi0[pi0 > 0])
-    out
-  }
-  
-  for (it in seq_len(maxiter)) {
-    
-    if (verbose) cat("Iteration", it, "\n")
-    PIP_prev <- PIP
-    
-    for (l in seq_len(L)) {
-      
-      b <- rowSums(mu * PIP) - mu[,l] * PIP[,l]
-      
-      XtOmegaXb <- V %*% ((crossprod(V, b) * Dsq) / var)
-      XtOmegar <- XtOmegay - XtOmegaXb
-      
-      if (est_ssq) {
-        f <- function(x) {
-          val <- -0.5 * log(1 + x * diagXtOmegaX) +
-            x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) +
-            logpi0
-          -logsumexp(val)
-        }
-        
-        opt <- optimize(f, ssq_range, tol = 1e-5)
-        
-        if (is.finite(opt$objective) &&
-            opt$minimum > ssq_range[1] &&
-            opt$minimum < ssq_range[2]) {
-          ssq[l] <- opt$minimum
-        } else if (verbose) {
-          cat(sprintf("WARNING: s^2 update failed at effect %d\n", l))
-        }
-      }
-      
-      omega[,l] <- diagXtOmegaX + 1 / ssq[l]
-      mu[,l] <- XtOmegar / omega[,l]
-      
-      lbf_variable[,l] <- XtOmegar^2 / (2 * omega[,l]) -
-        0.5 * log(omega[,l] * ssq[l])
-      
-      logPIP <- lbf_variable[,l] + logpi0
-      lbf[l] <- logsumexp(logPIP)
-      PIP[,l] <- exp(logPIP - lbf[l])
-    }
-    
-    if (est_sigmasq || est_tausq) {
-      if (method == "moments") {
-        res <- MoM(PIP, mu, omega, sigmasq, tausq, n, V, Dsq,
-                   VtXty, Xty, yty, est_sigmasq, est_tausq, verbose)
-      } else {
-        res <- MLE(PIP, mu, omega, sigmasq, tausq, n, V, Dsq,
-                   VtXty, yty, est_sigmasq, est_tausq,
-                   sigmasq_range, tausq_range, it, verbose)
-      }
-      sigmasq <- res$sigmasq; tausq <- res$tausq
-      
-      var <- tausq * Dsq + sigmasq
-      # diagXtOmegaX <- colSums(V^2 * (Dsq / var))
-      diagXtOmegaX <- colSums(t(V^2) * (Dsq / var))
-      XtOmegay <- V %*% (VtXty / var)
-    }
-    
-    PIP_diff <- max(abs(PIP_prev - PIP))
-    if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
-    
-    if (PIP_diff < PIP_tol) {
-      converged <- TRUE
-      break
-    }
-  }
-  
-  if (!exists("converged")) converged <- FALSE
-  
-  b <- rowSums(mu * PIP)
-  XtOmegaXb <- V %*% ((crossprod(V, b) * Dsq) / var)
-  XtOmegar <- XtOmegay - XtOmegaXb
-  alpha <- tausq * XtOmegar
-  marginalPIP <- 1 - apply(1 - PIP, 1, prod)
-  
-  list(PIP = PIP, marginalPIP = marginalPIP, mu = mu, omega = omega,
-       lbf = lbf, lbf_variable = lbf_variable,
-       ssq = ssq, sigmasq = sigmasq,
-       tausq = tausq, alpha = alpha,
-       converged = converged, variants = variants)
-}
-
-#' Title
-#'
 #' @param data a list containing a vector of outcomes y, data matrix X, and optionally a tree
 #' @param L number of modeled causal effects
 #' @param K a similarity matrix
@@ -1129,42 +932,37 @@ susieinf <- function(data, L, V = NULL, Dsq = NULL,
 #'
 #' @examples
 susieK <- function(data, L, K = NULL, phylo = TRUE,
-                     est_ssq = TRUE, ssq = NULL, ssq_range = c(0,1), pi0 = NULL,
-                     est_sigmasq = TRUE, est_tausq = TRUE,
-                     sigmasq = 1, tausq = 0,
-                     method = "moments",
-                     sigmasq_range = NULL, tausq_range = NULL,
-                     PIP = NULL, mu = NULL,
-                     maxiter = 100, PIP_tol = 1e-3, verbose = TRUE) {
+                   est_ssq = TRUE, ssq = NULL, ssq_range = c(0,1), pi0 = NULL,
+                   est_sigmasq = TRUE, est_tausq = TRUE,
+                   sigmasq = 1, tausq = 0,
+                   method = "moments",
+                   sigmasq_range = NULL, tausq_range = NULL,
+                   PIP = NULL, mu = NULL,
+                   maxiter = 100, PIP_tol = 1e-3, verbose = FALSE) {
   y <- data$y
   y <- y - mean(y)
   X <- data$X
-  # center columns
   X <- sweep(X, 2, colMeans(X), FUN = "-")
-  # scale columns 
-  X <- sweep(X, 2, apply(X, 2, sd), FUN = "/")
+  X <- sweep(X, 2, apply(X, 2, function(x) sqrt(mean((x - mean(x))^2))), FUN = "/")
   tree <- data$tree
   n <- nrow(X); p <- ncol(X)
   
-  # sample names standard
   if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
   if (is.null(names(y))) names(y) <- rownames(X)
-  if (!all(names(y) %in% rownames(X))) {
-    stop("Sample names in y must match rownames of X")
-  }
+  if (!all(names(y) %in% rownames(X))) stop("Sample names in y must match rownames of X")
   
-  samples <- names(y)
+  samples  <- names(y)
   variants <- colnames(X)
   
   if (is.null(K) & !phylo) {
-    K = X %*% t(X)
+    K <- X %*% t(X)
     message("K required if not using tree; using XX^T")
   }
   if (phylo) K <- ape::vcv.phylo(tree)[samples, samples]
   
   if (is.null(ssq)) ssq <- rep(0.2, L)
   if (is.null(PIP)) PIP <- matrix(1/p, p, L)
-  if (is.null(mu)) mu <- matrix(0, p, L)
+  if (is.null(mu))  mu  <- matrix(0,   p, L)
   
   lbf_variable <- matrix(0, p, L)
   lbf <- numeric(L)
@@ -1175,46 +973,43 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
     out
   }
   
-  eig <- eigen(K, symmetric = TRUE)
-  eigvals <- eig$values
-  Q <- eig$vectors
+  eig     <- eigen(K, symmetric = TRUE)
+  eigvals <- rev(eig$values)
+  Q       <- eig$vectors[, rev(seq_len(ncol(eig$vectors)))]
+  # eigvals <- eig$values
+  # Q       <- eig$vectors
   
-  Z <- crossprod(Q, X)          # Q^T X
-  y_tilde <- crossprod(Q, y)    # Q^T y
+  Z       <- crossprod(Q, X)   # Q^T X  (n x p)
+  y_tilde <- crossprod(Q, y)   # Q^T y
   
   w <- 1 / (tausq * eigvals + sigmasq)
   
   diagXtOmegaX <- colSums(Z^2 * w)
-  XtOmegay <- crossprod(Z, w * y_tilde)
+  # diagXtOmegaX <- as.numeric(crossprod(Z^2, w))
+  # diagXtOmegaX <- colSums(sweep(Z^2, 1, w, `*`))
+  XtOmegay     <- crossprod(Z, w * y_tilde)
   
-  # precompute invariants
-  yty <- crossprod(y,y)
-  Xty <- crossprod(X, y)
+  # --- precompute invariants for MoMK ---
+  yty  <- as.numeric(crossprod(y))
+  Xty  <- crossprod(X, y)            # p-vector
+  XtX  <- crossprod(X)               # p x p  (= Z^T Z since Q is orthogonal)
+  XtXsq <- XtX %*% XtX              # p x p
   
-  trK <- sum(eigvals)
-  trK2 <- sum(eigvals^2)
+  trXtX  <- sum(diag(XtX))
+  # trXtKX <- sum(colSums(Z^2) * eigvals) # tr(X^T K X) = tr(Z^T diag(eigvals) Z)
+  trXtKX <- sum(rowSums(Z^2) * eigvals)
   
-  yKy <- sum(eigvals * y_tilde^2)
-  XTKy <- crossprod(Z, eigvals * y_tilde)
-  
-  XtX_diag <- colSums(Z^2)
-  XTKX_diag <- colSums(Z^2 * eigvals)
-  
-  omega <- matrix(0, nrow = p, ncol = L)
   omega <- diagXtOmegaX + matrix(1 / ssq, nrow = p, ncol = L, byrow = TRUE)
-  # omega <- diagXtOmegaX + 1 / ssq
   
   for (it in seq_len(maxiter)) {
-    
     if (verbose) cat("Iteration", it, "\n")
     PIP_prev <- PIP
     
     for (l in seq_len(L)) {
-      
       b <- rowSums(mu * PIP) - mu[,l] * PIP[,l]
       
       XtOmegaXb <- crossprod(Z, w * (Z %*% b))
-      XtOmegar <- XtOmegay - XtOmegaXb
+      XtOmegar  <- XtOmegay - XtOmegaXb
       
       if (est_ssq) {
         f <- function(x) {
@@ -1222,51 +1017,47 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
             x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) + logpi0
           -logsumexp(val)
         }
-        opt <-  optimize(f, ssq_range, tol = 1e-5)
+        opt   <- optimize(f, ssq_range, tol = 1e-5)
         ssq[l] <- opt$minimum
+        if (verbose) cat(sprintf("Update s^2 for effect %d to %f\n", l, ssq[l]))
       }
       
-      omega[,l] <- diagXtOmegaX + 1 / ssq[l]
-      mu[,l] <- XtOmegar / omega[,l]
+      omega[,l]        <- diagXtOmegaX + 1 / ssq[l]
+      mu[,l]           <- XtOmegar / omega[,l]
+      lbf_variable[,l] <- XtOmegar^2 / (2 * omega[,l]) - 0.5 * log(omega[,l] * ssq[l])
       
-      lbf_variable[,l] <- XtOmegar^2 / (2 * omega[,l]) -
-        0.5 * log(omega[,l] * ssq[l])
-      
-      logPIP <- lbf_variable[,l] + logpi0
-      lbf[l] <- logsumexp(logPIP)
+      logPIP  <- lbf_variable[,l] + logpi0
+      lbf[l]  <- logsumexp(logPIP)
       PIP[,l] <- exp(logPIP - lbf[l])
     }
     
     if (est_sigmasq || est_tausq) {
       if (method == "moments") {
-        res <- MoMK(PIP, mu, omega, sigmasq, tausq, n, eigvals,
-                    XtX_diag, XTKX_diag, Xty, XTKy,
-                    yty, yKy, trK, trK2,
+        res <- MoMK(PIP, mu, omega, sigmasq, tausq, n,
+                    XtX, XtXsq, Xty, yty,          # <-- updated arguments
+                    trK = sum(eigvals), trXtX, trXtKX,
                     est_sigmasq, est_tausq, verbose)
         sigmasq <- res$sigmasq
-        tausq <- res$tausq
+        tausq   <- res$tausq
       } else {
         stop("MLE not implemented for K")
       }
       
-      w <- 1 / (tausq * eigvals + sigmasq)
+      w            <- 1 / (tausq * eigvals + sigmasq)
       diagXtOmegaX <- colSums(Z^2 * w)
-      XtOmegay <- crossprod(Z, w * y_tilde)
+      # diagXtOmegaX <- as.numeric(crossprod(Z^2, w))
+      # diagXtOmegaX <- colSums(sweep(Z^2, 1, w, `*`))
+      XtOmegay     <- crossprod(Z, w * y_tilde)
     }
     
     PIP_diff <- max(abs(PIP_prev - PIP))
     if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
-    
-    if (PIP_diff < PIP_tol) {
-      converged <- TRUE
-      break
-    }
+    if (PIP_diff < PIP_tol) { converged <- TRUE; break }
   }
   
   if (!exists("converged")) converged <- FALSE
   
-  b <- rowSums(mu * PIP)
-  r <- y - X %*% b
+  b          <- rowSums(mu * PIP)
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(PIP = PIP, marginalPIP = marginalPIP, mu = mu, omega = omega,
@@ -1275,181 +1066,3 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
        tausq = tausq, converged = converged, variants = variants)
 }
 
-#' Title
-#'
-#' @param data a list containing a vector of outcomes y and data matrix X.
-#' @param L number of modeled causal effects
-#' @param V precomputed p x p matrix of eigenvectors of X'X
-#' @param Dsq precomputed length-p vector of eigenvalues of X'X
-#' @param est_ssq estimate prior effect size variances s^2 using MLE
-#' @param ssq length-L initialization s^2 for each effect Default: 0.2 for every effect
-#' @param ssq_range lower and upper bounds for each s^2, if estimated
-#' @param pi0 length-p vector of prior causal probability for each SNP; must sum to 1 Default: 1/p for every SNP
-#' @param est_sigmasq estimate variance sigma^2
-#' @param est_tausq estimate both variances sigma^2 and tau^2
-#' @param sigmasq initial value for sigma^2
-#' @param tausq initial value for tau^2
-#' @param method one of {'moments','MLE'} (sigma^2,tau^2) are estimated using method-of-moments or MLE
-#' @param sigmasq_range lower and upper bounds for sigma^2, if estimated using MLE 
-#' @param tausq_range lower and upper bounds for tau^2
-#' @param PIP p x L initializations of PIPs Default: 1/#SNPs for each SNP and effect
-#' @param mu p x L initializations of mu; Default: 0 for each SNP and effect
-#' @param maxiter maximum number of SuSiE iterations
-#' @param PIP_tol convergence threshold for PIP difference between iterations
-#' @param verbose 
-#'
-#' @returns List containing PIP -- p x L matrix of PIPs, individually for each effect mu -- p x L matrix of posterior means conditional on causal omega -- p x L matrix of posterior precisions conditional on causal lbf -- length-L array of log-Bayes-factor for each effect lbf_variable -- p x L matrix of per-variable log-Bayes-factors ssq -- length-L array of final effect size variances s^2 sigmasq -- final value of sigma^2 tausq -- final value of tau^2 alpha -- length-p array of posterior means of infinitesimal effects
-#' @export
-#'
-#' @examples
-susieinf_wrapper <- function(data, L, V = NULL, Dsq = NULL,
-                     est_ssq = TRUE, ssq = NULL, ssq_range = c(0,1), pi0 = NULL,
-                     est_sigmasq = TRUE, est_tausq = TRUE,
-                     sigmasq = 1, tausq = 0,
-                     method = "moments",
-                     sigmasq_range = NULL, tausq_range = NULL,
-                     PIP = NULL, mu = NULL,
-                     maxiter = 100, PIP_tol = 1e-3, verbose = TRUE) {
-  y <- data$y
-  y <- y - mean(y)
-  X <- data$X
-  # center columns
-  X <- sweep(X, 2, colMeans(X), "-")
-  col_sd <- sqrt(colMeans(X^2))   
-  X <- sweep(X, 2, col_sd, "/")
-  n <- nrow(X); p <- ncol(X)
-  
-  # sample names standard
-  if (is.null(rownames(X))) rownames(X) <- paste0("sample_", seq(1:n))
-  if (is.null(names(y))) names(y) <- rownames(X)
-  if (!all(names(y) %in% rownames(X))) {
-    stop("Sample names in y must match rownames of X")
-  }
-  
-  samples <- names(y)
-  variants <- colnames(X)
-  
-  # LD matrix
-  LD <- crossprod(X) / n
-  # z <- t(X) %*% y / sqrt(n)
-  z <- as.vector(crossprod(X, y) / sqrt(n))
-  meansq <- sum(y^2) / n
-  
-  if ((is.null(V) || is.null(Dsq)) && is.null(LD))
-    stop("Missing LD")
-  
-  if (is.null(V) || is.null(Dsq)) {
-    eig <- eigen(LD, symmetric = TRUE)
-    V <- eig$vectors
-    Dsq <- pmax(n * eig$values, 0)
-  } else {
-    Dsq <- pmax(Dsq, 0)
-  }
-  
-  Xty <- sqrt(n) * z
-  VtXty <- crossprod(V, Xty)
-  yty <- n * meansq
-  
-  var <- tausq * Dsq + sigmasq
-  # diagXtOmegaX <- colSums(V^2 * (Dsq / var))
-  diagXtOmegaX <- colSums(t(V^2) * (Dsq / var))
-  XtOmegay <- as.vector(V %*% (VtXty / var))
-  
-  if (is.null(ssq)) ssq <- rep(0.2, L)
-  if (is.null(PIP)) PIP <- matrix(1/p, p, L)
-  if (is.null(mu)) mu <- matrix(0, p, L)
-  
-  lbf_variable <- matrix(0, p, L)
-  lbf <- numeric(L)
-  omega <- matrix(0, nrow = p, ncol = L)
-  omega <- diagXtOmegaX + matrix(1 / ssq, nrow = p, ncol = L, byrow = TRUE)
-  # omega <- diagXtOmegaX + 1 / ssq
-  
-  logpi0 <- if (is.null(pi0)) rep(log(1/p), p) else {
-    out <- rep(-Inf, p)
-    out[pi0 > 0] <- log(pi0[pi0 > 0])
-    out
-  }
-  
-  for (it in seq_len(maxiter)) {
-    
-    if (verbose) cat("Iteration", it, "\n")
-    PIP_prev <- PIP
-    
-    for (l in seq_len(L)) {
-      
-      b <- rowSums(mu * PIP) - mu[,l] * PIP[,l]
-      
-      XtOmegaXb <- V %*% ((crossprod(V, b) * Dsq) / var)
-      XtOmegar <- XtOmegay - XtOmegaXb
-      
-      if (est_ssq) {
-        f <- function(x) {
-          val <- -0.5 * log(1 + x * diagXtOmegaX) +
-            x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) +
-            logpi0
-          -logsumexp(val)
-        }
-        
-        opt <- optimize(f, ssq_range, tol = 1e-5)
-        
-        if (is.finite(opt$objective) &&
-            opt$minimum > ssq_range[1] &&
-            opt$minimum < ssq_range[2]) {
-          ssq[l] <- opt$minimum
-        } else if (verbose) {
-          cat(sprintf("WARNING: s^2 update failed at effect %d\n", l))
-        }
-      }
-      
-      omega[,l] <- diagXtOmegaX + 1 / ssq[l]
-      mu[,l] <- XtOmegar / omega[,l]
-      
-      lbf_variable[,l] <- XtOmegar^2 / (2 * omega[,l]) -
-        0.5 * log(omega[,l] * ssq[l])
-      
-      logPIP <- lbf_variable[,l] + logpi0
-      lbf[l] <- logsumexp(logPIP)
-      PIP[,l] <- exp(logPIP - lbf[l])
-    }
-    
-    if (est_sigmasq || est_tausq) {
-      if (method == "moments") {
-        res <- MoM(PIP, mu, omega, sigmasq, tausq, n, V, Dsq,
-                   VtXty, Xty, yty, est_sigmasq, est_tausq, verbose)
-      } else {
-        res <- MLE(PIP, mu, omega, sigmasq, tausq, n, V, Dsq,
-                   VtXty, yty, est_sigmasq, est_tausq,
-                   sigmasq_range, tausq_range, it, verbose)
-      }
-      sigmasq <- res$sigmasq; tausq <- res$tausq
-      
-      var <- tausq * Dsq + sigmasq
-      # diagXtOmegaX <- colSums(V^2 * (Dsq / var))
-      diagXtOmegaX <- colSums(t(V^2) * (Dsq / var))
-      XtOmegay <- V %*% (VtXty / var)
-    }
-    
-    PIP_diff <- max(abs(PIP_prev - PIP))
-    if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
-    
-    if (PIP_diff < PIP_tol) {
-      converged <- TRUE
-      break
-    }
-  }
-  
-  if (!exists("converged")) converged <- FALSE
-  
-  b <- rowSums(mu * PIP)
-  XtOmegaXb <- V %*% ((crossprod(V, b) * Dsq) / var)
-  XtOmegar <- XtOmegay - XtOmegaXb
-  alpha <- tausq * XtOmegar
-  marginalPIP <- 1 - apply(1 - PIP, 1, prod)
-  
-  list(PIP = PIP, marginalPIP = marginalPIP, mu = mu, omega = omega,
-       lbf = lbf, lbf_variable = lbf_variable,
-       ssq = ssq, sigmasq = sigmasq,
-       tausq = tausq, alpha = alpha,
-       converged = converged, variants = variants)
-}

@@ -24,7 +24,7 @@ susieK(
   mu = NULL,
   maxiter = 100,
   PIP_tol = 0.001,
-  verbose = TRUE
+  verbose = FALSE
 )
 }
 \arguments{

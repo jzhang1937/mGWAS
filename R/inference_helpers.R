@@ -105,48 +105,6 @@ MLE <- function(PIP, mu, omega, sigmasq, tausq, n, V, Dsq, VtXty, yty,
   
   list(sigmasq = sigmasq, tausq = tausq)
 }
-MoMK <- function(PIP, mu, omega, sigmasq, tausq, n, eigvals,
-                 XtX_diag, XTKX_diag, Xty, XTKy, yty, yKy, trK, trK2,
-                 est_sigmasq, est_tausq, verbose) {
-  
-  p <- nrow(mu); L <- ncol(mu)
-  
-  # Use byrow=TRUE to match Python row order
-  A <- matrix(c(n, trK, trK, trK2), 2, 2, byrow = TRUE)
-  
-  b <- rowSums(mu * PIP)
-  
-  diagM <- b^2
-  tmpD <- numeric(p)
-  
-  for (l in seq_len(L)) {
-    bl <- mu[, l] * PIP[, l]
-    diagM <- diagM - bl^2
-    tmpD <- tmpD + PIP[, l] * (mu[, l]^2 + 1 / omega[, l])
-  }
-  
-  diagM <- diagM + tmpD
-  
-  x0 <- yty - 2 * sum(b * Xty) + sum(XtX_diag * diagM)
-  x1 <- yKy - 2 * sum(b * XTKy) + sum(XTKX_diag * diagM)
-  
-  x <- c(x0, x1)
-  
-  if (est_tausq) {
-    sol <- solve(A, x)
-    if (sol[1] > 0 && sol[2] > 0) {
-      sigmasq <- sol[1]; tausq <- sol[2]
-    } else {
-      sigmasq <- x[1] / n; tausq <- 0
-    }
-    if (verbose) cat(sprintf("Update (sigma^2,tau^2) to (%f,%e)\n", sigmasq, tausq))
-  } else if (est_sigmasq) {
-    sigmasq <- (x[1] - A[1, 2] * tausq) / n
-    if (verbose) cat(sprintf("Update sigma^2 to %f\n", sigmasq))
-  }
-  
-  list(sigmasq = sigmasq, tausq = tausq)
-}
 
 MoMK_old <- function(PIP, mu, omega, sigmasq, tausq, n, eigvals,
                  XtX_diag, XTKX_diag, Xty, XTKy, yty, yKy, trK, trK2,
@@ -190,30 +148,47 @@ MoMK_old <- function(PIP, mu, omega, sigmasq, tausq, n, eigvals,
   list(sigmasq = sigmasq, tausq = tausq)
 }
 
-MoMK <- function(PIP, mu, omega, sigmasq, tausq, n, eigvals,
-                 XtX_diag, XTKX_diag, Xty, XTKy, yty, yKy, trK, trK2,
+MoMK <- function(PIP, mu, omega, sigmasq, tausq, n,
+                 XtX, XtXsq, Xty, yty,
+                 trK, trXtX, trXtKX,
                  est_sigmasq, est_tausq, verbose) {
   
   p <- nrow(mu); L <- ncol(mu)
   
-  # Use byrow=TRUE to match Python row order
-  A <- matrix(c(n, trK, trK, trK2), 2, 2, byrow = TRUE)
+  # A matches Python: [[n, trK], [trXtX, trXtKX]]
+  A <- matrix(c(n, trK,
+                trXtX, trXtKX), 2, 2, byrow = TRUE)
   
-  b <- rowSums(mu * PIP)
+  b <- rowSums(mu * PIP)       # length-p posterior mean vector
+  XtXb  <- XtX  %*% b
+  XtXsqb <- XtXsq %*% b
   
-  diagM <- b^2
-  tmpD <- numeric(p)
+  diag_XtX   <- diag(XtX)
+  diag_XtXsq <- diag(XtXsq)
+  
+  # tr(X'X M) and tr(X'X^2 M)
+  # = b'(X'X)b + sum_l [ diag(X'X)·s_l - bl'(X'X)bl ]
+  trXtXM   <- as.numeric(b %*% XtXb)
+  trXtXsqM <- as.numeric(b %*% XtXsqb)
   
   for (l in seq_len(L)) {
     bl <- mu[, l] * PIP[, l]
-    diagM <- diagM - bl^2
-    tmpD <- tmpD + PIP[, l] * (mu[, l]^2 + 1 / omega[, l])
+    sl <- PIP[, l] * (mu[, l]^2 + 1 / omega[, l])
+    XtXbl   <- XtX   %*% bl
+    XtXsqbl <- XtXsq %*% bl
+    # trXtXM   <- trXtXM   + sum(diag_XtX   * sl) - as.numeric(bl %*% XtXbl)
+    # trXtXsqM <- trXtXsqM + sum(diag_XtXsq * sl) - as.numeric(bl %*% XtXsqbl)
+    trXtXM   <- trXtXM   + sum(diag_XtX   * sl) - sum(bl * as.numeric(XtXbl))
+    trXtXsqM <- trXtXsqM + sum(diag_XtXsq * sl) - sum(bl * as.numeric(XtXsqbl))
   }
   
-  diagM <- diagM + tmpD
-  
-  x0 <- yty - 2 * sum(b * Xty) + sum(XtX_diag * diagM)
-  x1 <- yKy - 2 * sum(b * XTKy) + sum(XTKX_diag * diagM)
+  # x0 = yty - 2 b'Xty + tr(X'X M)
+  # x1 = sum(Xty^2) - 2 (X'Xb)'Xty + tr(X'X^2 M)
+  # x0 <- as.numeric(yty) - 2 * as.numeric(b %*% Xty) + trXtXM
+  # x1 <- sum(Xty^2)      - 2 * as.numeric(XtXb %*% Xty) + trXtXsqM
+  # x1 <- sum(Xty^2) - 2 * as.numeric(crossprod(XtXb, Xty)) + trXtXsqM
+  x0 <- as.numeric(yty) - 2 * sum(b * as.numeric(Xty)) + trXtXM
+  x1 <- sum(Xty^2)      - 2 * sum(as.numeric(XtXb) * as.numeric(Xty)) + trXtXsqM
   
   x <- c(x0, x1)
   
@@ -232,4 +207,3 @@ MoMK <- function(PIP, mu, omega, sigmasq, tausq, n, eigvals,
   
   list(sigmasq = sigmasq, tausq = tausq)
 }
-
