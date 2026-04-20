@@ -340,6 +340,42 @@ draw_continuous_global_null <- function(tree, p) {
   )
 }
 
+create_param_grid_fractional_factorial_list <- function(varying_values, baseline_values) {
+  var_names <- names(varying_values)
+  df_pieces <- lapply(var_names, function(curr_var) {
+    varying <- varying_values[curr_var]
+    fixed <- baseline_values[names(baseline_values) != curr_var]
+    l_varying <- length(varying[[1]])
+    # allow for testing equality of lists
+    curr_val_fixed_loc <- identical(varying_values[[curr_var]],baseline_values[[curr_var]])
+    arm_bool <- lapply(var_names, function(i) {
+      if (i == curr_var) {
+        rep(TRUE, times = l_varying)
+      } else {
+        if (baseline_values[[i]] %in% varying_values[[i]]) curr_val_fixed_loc else rep(FALSE, l_varying)
+      }
+    }) %>% purrr::set_names(paste0("arm_", var_names))
+    # allow for lists, assign appropriate column name to th df.
+    df <- data.frame(placeholder = rep(NA,l_varying))
+    df$placeholder <- varying[[curr_var]]
+    colnames(df) <- curr_var
+    
+    for (m in 1:length(fixed)) {
+      fixed_df <- data.frame(placeholder = rep(NA,l_varying))
+      fixed_df$placeholder <- rep(fixed[[m]],l_varying)
+      colnames(fixed_df) <- names(fixed)[m]
+      df <- cbind(df,fixed_df)
+    }
+    df <- cbind(df,arm_bool)
+    df
+  })
+  grid_df <- do.call(rbind, df_pieces)
+  idx_to_keep <- !duplicated(dplyr::select(grid_df, var_names))
+  out <- grid_df[idx_to_keep,]
+  out$grid_id <- seq(1, nrow(out))
+  return(out)
+}
+
 
 
 
