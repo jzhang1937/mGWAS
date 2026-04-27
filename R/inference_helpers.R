@@ -148,7 +148,7 @@ MoMK_old <- function(PIP, mu, omega, sigmasq, tausq, n, eigvals,
   list(sigmasq = sigmasq, tausq = tausq)
 }
 
-MoMK <- function(PIP, mu, omega, sigmasq, tausq, n,
+MoMK_naive <- function(PIP, mu, omega, sigmasq, tausq, n,
                  XtX, XtXsq, Xty, yty,
                  trK, trXtX, trXtKX,
                  est_sigmasq, est_tausq, verbose) {
@@ -189,6 +189,57 @@ MoMK <- function(PIP, mu, omega, sigmasq, tausq, n,
   # x1 <- sum(Xty^2) - 2 * as.numeric(crossprod(XtXb, Xty)) + trXtXsqM
   x0 <- as.numeric(yty) - 2 * sum(b * as.numeric(Xty)) + trXtXM
   x1 <- sum(Xty^2)      - 2 * sum(as.numeric(XtXb) * as.numeric(Xty)) + trXtXsqM
+  
+  x <- c(x0, x1)
+  
+  if (est_tausq) {
+    sol <- solve(A, x)
+    if (sol[1] > 0 && sol[2] > 0) {
+      sigmasq <- sol[1]; tausq <- sol[2]
+    } else {
+      sigmasq <- x[1] / n; tausq <- 0
+    }
+    if (verbose) cat(sprintf("Update (sigma^2,tau^2) to (%f,%e)\n", sigmasq, tausq))
+  } else if (est_sigmasq) {
+    sigmasq <- (x[1] - A[1, 2] * tausq) / n
+    if (verbose) cat(sprintf("Update sigma^2 to %f\n", sigmasq))
+  }
+  
+  list(sigmasq = sigmasq, tausq = tausq)
+}
+
+MoMK <- function(PIP, mu, omega, sigmasq, tausq, n,
+                 Z_new, D_Z, y_new,          # replaces XtX, XtXsq
+                 Xty, yty,
+                 diagXtX, diagXtXsq,         # precomputed diagonals
+                 trK, trXtX, trXtKX,
+                 est_sigmasq, est_tausq, verbose) {
+  
+  L <- ncol(mu)
+  
+  A <- matrix(c(n,     trK,
+                trXtX, trXtKX), 2, 2, byrow = TRUE)
+  
+  b  <- rowSums(mu * PIP)
+  Zb <- as.numeric(Z_new %*% b)           # n-vector, O(np)
+  
+  # b'(X'X)b = ||Zb||^2
+  # b'(X'X)^2 b = (Zb)' D_Z (Zb) = sum(D_Z * Zb^2)
+  trXtXM   <- sum(Zb^2)
+  trXtXsqM <- sum(D_Z * Zb^2)
+  
+  for (l in seq_len(L)) {
+    bl  <- mu[, l] * PIP[, l]
+    sl  <- PIP[, l] * (mu[, l]^2 + 1 / omega[, l])
+    Zbl <- as.numeric(Z_new %*% bl)       # n-vector, O(np)
+    
+    trXtXM   <- trXtXM   + sum(diagXtX   * sl) - sum(Zbl^2)
+    trXtXsqM <- trXtXsqM + sum(diagXtXsq * sl) - sum(D_Z * Zbl^2)
+  }
+  
+  x0 <- yty       - 2 * sum(b * Xty)              + trXtXM
+  # sum(XtXb * Xty) = b'(X'X)(X'y) = (Zb)' D_Z y_new
+  x1 <- sum(Xty^2) - 2 * sum(D_Z * Zb * y_new)   + trXtXsqM
   
   x <- c(x0, x1)
   
