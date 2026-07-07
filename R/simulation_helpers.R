@@ -142,6 +142,28 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
     intercept <- y_given_X_hyperparams$intercept
   }
   
+  # check tausq
+  if (is.null(y_given_X_hyperparams$tausq)) {
+    tausq <- 0
+  } else {
+    tausq <- y_given_X_hyperparams$tausq
+  }
+  
+  if (y_given_X_hyperparams$sim == "AR") {
+    similarity <- y_given_X_hyperparams$rho^abs(outer(1:n, 1:n, "-"))
+    chol_similarity <- chol(similarity)
+  } else if (y_given_X_hyperparams$sim == "XXT") {
+    mod_X <- scale(X, center = TRUE, scale = TRUE)
+    mod_X <- mod_X * sqrt((n - 1) / n)
+    similarity <- mod_X %*% t(mod_X) / p
+    chol_similarity <- chol(similarity)
+  } else if (y_given_X_hyperparams$sim == "tree") {
+    similarity <- ape::vcv.phylo(tree)
+    chol_similarity <- chol(similarity)
+  }
+  
+  
+  
   # generate y's.
   if (y_given_X == "linear") {
     if (s == 0) {
@@ -167,7 +189,14 @@ generate_data <- function(n, p, s, joint_X, y_given_X, X_hyperparams,
         c(intercept, beta),
         family
       )
-      y <- y.rec[1:n]
+      if (is.null(y_given_X_hyperparams$sim)) {
+        y <- y.rec[1:n]
+      } else {
+        correlated_noise <- sqrt(tausq) * drop(crossprod(chol_similarity, rnorm(n)))
+        y.rec <- y.rec + correlated_noise
+        y <- y.rec[1:n]
+      }
+      
     }
     names(y) <- rownames(X)
   } else if (y_given_X == "gam") {

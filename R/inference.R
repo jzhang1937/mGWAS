@@ -1283,7 +1283,7 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
                      sigmasq = 1, tausq = 0,
                      sigmasq_range = NULL, tausq_range = NULL,
                      PIP = NULL, mu = NULL,
-                     maxiter = 100, PIP_tol = 1e-3, LD = TRUE, verbose = FALSE) {
+                     maxiter = 100, PIP_tol = 1e-3, LD = FALSE, verbose = FALSE) {
   
   # ── data prep ────────────────────────────────────────────────────────────────
   y    <- data$y;   y <- y - mean(y)

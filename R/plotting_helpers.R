@@ -595,3 +595,32 @@ truncate_variants <- function(variants) {
   sub("^(?:[^:]*:){2}([^:]*):.*$", "\\1", variants)
 }
 
+pyseer_to_manhattan <- function(infile, chrom, outfile,
+                                pval_col = "lrt-pvalue") {
+  df <- read.delim(infile, header = TRUE, stringsAsFactors = FALSE)
+  
+  # extract position from variant name: CHROM_POS_REF_ALT -> POS
+  pos <- as.numeric(sapply(strsplit(df$variant, "_"), `[`, 2))
+  
+  pval <- df[[pval_col]]
+  neglog10p <- -log10(pval)
+  
+  out <- data.frame(
+    `#CHR`       = chrom,
+    SNP          = ".",
+    BP           = pos,
+    `minLOG10(P)`= neglog10p,
+    `log10(p)`   = neglog10p,
+    `r^2`        = 0,
+    check.names = FALSE
+  )
+  
+  # drop rows where p-value was NA/invalid (e.g. NaN, filtered variants)
+  out <- out[is.finite(out$`minLOG10(P)`), ]
+  
+  write.table(out, outfile, sep = "\t", quote = FALSE,
+              row.names = FALSE, col.names = TRUE)
+  
+  invisible(out)
+}
+
