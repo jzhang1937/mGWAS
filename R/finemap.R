@@ -385,6 +385,81 @@ run_susieKv2_loci <- function(loci, data, L = 10, min_pip = 0.95, ...) {
   results
 }
 
+#' Run susie_function on each locus
+#'
+#' @param loci       output of define_loci()
+#' @param data       list with $X (n x p), $y (length-n), $tree (phylo object or NULL)
+#' @param L          max number of causal signals per locus (default 10)
+#' @param min_pip    PIP threshold to define a credible set (variants with PIP > threshold)
+#' @param ...        additional arguments passed to susie_function
+#' @param susie_function choice of susie method
+#'
+#' @return list of results, one per locus, each with:
+#'   $fit         : raw susieKv2 fit object
+#'   $cs          : credible sets with original variant indices
+#'   $pip         : named vector of marginal PIPs for locus variants (original indices)
+
+run_susie_function_loci <- function(loci, data, susie_function, L = 10, min_pip = 0.95, ...) {
+  
+  results <- vector("list", length(loci))
+  
+  for (k in seq_along(loci)) {
+    
+    idx <- loci[[k]]$variants
+    message(sprintf("\nLocus %d: %d variants, lead(s): %s",
+                    k, length(idx), paste(loci[[k]]$leads, collapse = ", ")))
+    
+    # Subset data to locus variants
+    locus_data <- list(
+      X    = data$X[, idx, drop = FALSE],
+      y    = data$y,
+      tree = data$tree
+    )
+    
+    fit <- tryCatch(
+      susie_function(data = locus_data, L = L, ...),
+      error = function(e) {
+        message(sprintf("  susie function failed: %s", e$message))
+        NULL
+      }
+    )
+    
+    if (is.null(fit)) {
+      results[[k]] <- list(fit = NULL, cs = NULL, pip = NULL)
+      next
+    }
+    
+    # susieKv2 returns marginalPIP (length-p vector, named by colnames of locus X)
+    pip <- fit$marginalPIP
+    
+    # Credible sets: for each of the L components, collect variants above min_pip
+    cs_original <- vector("list", L)
+    for (l in seq_len(L)) {
+      in_cs <- which(fit$PIP[, l] > min_pip)
+      if (length(in_cs) > 0) {
+        cs_original[[l]] <- idx[in_cs]
+      }
+    }
+    # Drop empty components
+    cs_original <- Filter(Negate(is.null), cs_original)
+    
+    if (length(cs_original) > 0) {
+      message(sprintf("  %d credible set(s) found.", length(cs_original)))
+    } else {
+      message("  No credible sets found.")
+      cs_original <- NULL
+    }
+    
+    results[[k]] <- list(
+      fit = fit,
+      cs  = cs_original,
+      pip = setNames(pip, idx)
+    )
+  }
+  
+  results
+}
+
 #' Define loci by hierarchical clustering on r² distance (no positional structure)
 #'
 #' @param R2       p x p matrix of r² values between variants

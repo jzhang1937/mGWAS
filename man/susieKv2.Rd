@@ -23,6 +23,7 @@ susieKv2(
   mu = NULL,
   maxiter = 100,
   PIP_tol = 0.001,
+  LD = FALSE,
   verbose = FALSE
 )
 }

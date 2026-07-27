@@ -1103,7 +1103,7 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
                    method = "moments",
                    sigmasq_range = NULL, tausq_range = NULL,
                    PIP = NULL, mu = NULL,
-                   maxiter = 100, PIP_tol = 1e-3, LD = TRUE, verbose = FALSE) {
+                   maxiter = 100, PIP_tol = 1e-3, LD = FALSE, verbose = FALSE) {
   y <- data$y
   y <- y - mean(y)
   X <- data$X
@@ -1454,7 +1454,7 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
                      PIP = NULL, mu = NULL,
                      maxiter = 100, PIP_tol = 1e-3,
                      maxiter_vc = 20, tol_vc = 1e-8,
-                     LD = TRUE,
+                     LD = FALSE, 
                      verbose = FALSE) {
   
   # ── data prep ────────────────────────────────────────────────────────────────
