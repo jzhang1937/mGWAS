@@ -720,6 +720,98 @@ process_susie_results <- function(method_names, parameter_grid, iter,
   results
 }
 
+process_pyseer_results <- function(method_names, parameter_grid, iter,
+                                   alpha = 0.75, data_dir) {
+  
+  n <- length(method_names) * nrow(parameter_grid) * iter
+  results <- data.frame(
+    method = character(n),
+    iter = integer(n),
+    grid_id = integer(n),
+    fp = numeric(n),
+    fdp = numeric(n),
+    fwe = numeric(n),
+    fdp_min = numeric(n),
+    power_raw = numeric(n),
+    power_bh = numeric(n),
+    power_bonf = numeric(n),
+    power_min = numeric(n)
+  )
+  
+  count <- 1
+  for (index in 1:nrow(parameter_grid)) {
+    grid_id <- parameter_grid$grid_id[index]
+    s <- parameter_grid$s[index]
+    print(index)
+    
+    for (method in method_names) {
+      for (j in 1:iter) {
+        cur_result <- tryCatch(
+          readRDS(paste0(data_dir, "/", method, "/", method, "_index_", index, "_iter_", j, "_results.rds")),
+          error = function(e) NULL
+        )
+        
+        if (is.null(cur_result) || (length(cur_result) == 1 && is.na(cur_result))) next
+        
+        nonnulls <- cur_result$name
+        
+        has_pvals <- (is.data.frame(cur_result) || is.list(cur_result)) &&
+          !is.null(cur_result$lrt.pvalue) &&
+          !is.null(cur_result$variant)
+        
+        if (!has_pvals) {
+          fp <- NA; fdp <- NA; fwe <- NA; fdp_min <- NA
+          power_raw <- NA; power_bh <- NA; power_bonf <- NA; power_min <- NA
+        } else {
+          p.vals <- cur_result$lrt.pvalue
+          variants <- cur_result$variant
+          
+          keep <- !is.na(p.vals)
+          p.vals <- p.vals[keep]
+          variants <- variants[keep]
+          
+          if (length(p.vals) == 0) {
+            fp <- NA; fdp <- NA; fwe <- NA; fdp_min <- NA
+            power_raw <- NA; power_bh <- NA; power_bonf <- NA; power_min <- NA
+          } else {
+            nonnulls.raw <- variants[which(p.vals < alpha)]
+            nonnulls.bh <- variants[which(p.adjust(p.vals, method = "BH") < alpha)]
+            nonnulls.bonf <- variants[which(p.adjust(p.vals, method = "bonferroni") < alpha)]
+            nonnulls.min <- variants[order(p.vals)[1:s]]
+            
+            fp <- length(setdiff(nonnulls.raw, nonnulls)) / max(1, length(nonnulls.raw))
+            fdp <- length(setdiff(nonnulls.bh, nonnulls)) / max(1, length(nonnulls.bh))
+            fwe <- length(setdiff(nonnulls.bonf, nonnulls)) >= 1
+            fdp_min <- length(setdiff(nonnulls.min, nonnulls)) / max(1, length(nonnulls.min))
+            power_raw <- sum(nonnulls %in% nonnulls.raw) / s
+            power_bh <- sum(nonnulls %in% nonnulls.bh) / s
+            power_bonf <- sum(nonnulls %in% nonnulls.bonf) / s
+            power_min <- sum(nonnulls %in% nonnulls.min) / s
+          }
+        }
+        
+        results[count,] <- c(method, j, grid_id, fp, fdp, fwe, fdp_min,
+                             power_raw, power_bh, power_bonf, power_min)
+        count <- count + 1
+      }
+    }
+  }
+  
+  results$fp <- as.numeric(results$fp)
+  results$fdp <- as.numeric(results$fdp)
+  results$fwe <- as.logical(results$fwe)
+  results$fdp_min <- as.numeric(results$fdp_min)
+  results$power_raw <- as.numeric(results$power_raw)
+  results$power_bh <- as.numeric(results$power_bh)
+  results$power_bonf <- as.numeric(results$power_bonf)
+  results$power_min <- as.numeric(results$power_min)
+  results$grid_id <- as.integer(results$grid_id)
+  results$iter <- as.integer(results$iter)
+  
+  results
+}
+
+
 process_pyseer_susie_results <- function(method_names, parameter_grid, iter,
                                          aggregation = c("mean", "median", "max"),
                                          alpha = 0.75, data_dir) {
@@ -757,14 +849,21 @@ process_pyseer_susie_results <- function(method_names, parameter_grid, iter,
         
         nonnulls <- cur_result$name
         
-        raw_df <- data.frame(
-          variant_name = cur_result$variant_name,
-          pip = cur_result$pip
-        )
+        has_pip <- is.list(cur_result) &&
+          !is.null(cur_result$pip) &&
+          !is.null(cur_result$variant_name)
+        
+        if (has_pip) {
+          raw_df <- data.frame(
+            variant_name = cur_result$variant_name,
+            pip = cur_result$pip
+          )
+          raw_df <- raw_df[!is.na(raw_df$pip), ]
+        }
         
         for (agg in aggregation) {
           
-          if (!is.list(cur_result)) {
+          if (!has_pip || nrow(raw_df) == 0) {
             fp <- NA; fdp <- NA; fwe <- NA; fdp_min <- NA
             power_raw <- NA; power_bh <- NA; power_bonf <- NA; power_min <- NA
           } else {
@@ -814,8 +913,205 @@ process_pyseer_susie_results <- function(method_names, parameter_grid, iter,
   results
 }
 
-process_pyseer_results <- function(method_names, parameter_grid, iter,
-                                   alpha = 0.75, data_dir) {
+process_pyseer_susie_zero_results <- function(method_names, parameter_grid, iter,
+                                              aggregation = c("mean", "median", "max"),
+                                              alpha = 0.75, data_dir) {
+  
+  n <- length(method_names) * nrow(parameter_grid) * iter * length(aggregation)
+  results <- data.frame(
+    method = character(n),
+    aggregation = character(n),
+    iter = integer(n),
+    grid_id = integer(n),
+    fp = numeric(n),
+    fdp = numeric(n),
+    fwe = numeric(n),
+    fdp_min = numeric(n),
+    power_raw = numeric(n),
+    power_bh = numeric(n),
+    power_bonf = numeric(n),
+    power_min = numeric(n)
+  )
+  
+  count <- 1
+  for (index in 1:nrow(parameter_grid)) {
+    grid_id <- parameter_grid$grid_id[index]
+    s <- parameter_grid$s[index]
+    print(index)
+    
+    for (method in method_names) {
+      for (j in 1:iter) {
+        cur_result <- tryCatch(
+          readRDS(paste0(data_dir, "/", method, "/", method, "_index_", index, "_iter_", j, "_results.rds")),
+          error = function(e) NULL
+        )
+        
+        if (is.null(cur_result) || (length(cur_result) == 1 && is.na(cur_result))) next
+        
+        nonnulls <- cur_result$name
+        
+        has_pip <- is.list(cur_result) &&
+          !is.null(cur_result$pip) &&
+          !is.null(cur_result$variant_name)
+        
+        if (has_pip) {
+          raw_df <- data.frame(
+            variant_name = cur_result$variant_name,
+            pip = cur_result$pip
+          )
+          raw_df <- raw_df[!is.na(raw_df$pip), ]
+        }
+        
+        for (agg in aggregation) {
+          
+          if (!has_pip || nrow(raw_df) == 0) {
+            fp <- 0; fdp <- 0; fwe <- 0; fdp_min <- 0
+            power_raw <- 0; power_bh <- 0; power_bonf <- 0; power_min <- 0
+          } else {
+            agg_fun <- match.fun(agg)
+            
+            agg_df <- raw_df %>%
+              group_by(variant_name) %>%
+              summarise(pip_agg = agg_fun(pip, na.rm = TRUE), .groups = "drop")
+            
+            p.vals <- 1 - agg_df$pip_agg
+            variants <- agg_df$variant_name
+            
+            nonnulls.raw <- variants[which(p.vals < alpha)]
+            nonnulls.bh <- variants[which(p.adjust(p.vals, method = "BH") < alpha)]
+            nonnulls.bonf <- variants[which(p.adjust(p.vals, method = "bonferroni") < alpha)]
+            nonnulls.min <- variants[order(p.vals)[1:s]]
+            
+            fp <- length(setdiff(nonnulls.raw, nonnulls)) / max(1, length(nonnulls.raw))
+            fdp <- length(setdiff(nonnulls.bh, nonnulls)) / max(1, length(nonnulls.bh))
+            fwe <- length(setdiff(nonnulls.bonf, nonnulls)) >= 1
+            fdp_min <- length(setdiff(nonnulls.min, nonnulls)) / max(1, length(nonnulls.min))
+            power_raw <- sum(nonnulls %in% nonnulls.raw) / s
+            power_bh <- sum(nonnulls %in% nonnulls.bh) / s
+            power_bonf <- sum(nonnulls %in% nonnulls.bonf) / s
+            power_min <- sum(nonnulls %in% nonnulls.min) / s
+          }
+          
+          results[count,] <- c(method, agg, j, grid_id, fp, fdp, fwe, fdp_min,
+                               power_raw, power_bh, power_bonf, power_min)
+          count <- count + 1
+        }
+      }
+    }
+  }
+  
+  results$fp <- as.numeric(results$fp)
+  results$fdp <- as.numeric(results$fdp)
+  results$fwe <- as.logical(results$fwe)
+  results$fdp_min <- as.numeric(results$fdp_min)
+  results$power_raw <- as.numeric(results$power_raw)
+  results$power_bh <- as.numeric(results$power_bh)
+  results$power_bonf <- as.numeric(results$power_bonf)
+  results$power_min <- as.numeric(results$power_min)
+  results$grid_id <- as.integer(results$grid_id)
+  results$iter <- as.integer(results$iter)
+  
+  results
+}
+
+process_susie_zero_results <- function(method_names, parameter_grid, iter,
+                                       alpha = 0.75, data_dir) {
+  
+  n <- length(method_names) * nrow(parameter_grid) * iter
+  results <- data.frame(
+    method = character(n),
+    iter = integer(n),
+    grid_id = integer(n),
+    fp = numeric(n),
+    fdp = numeric(n),
+    fwe = numeric(n),
+    fdp_min = numeric(n),
+    power_raw = numeric(n),
+    power_bh = numeric(n),
+    power_bonf = numeric(n),
+    power_min = numeric(n),
+    ssq_diff = numeric(n),
+    tausq_diff = numeric(n)
+  )
+  
+  count <- 1
+  for (index in 1:nrow(parameter_grid)) {
+    grid_id <- parameter_grid$grid_id[index]
+    s <- parameter_grid$s[index]
+    true_tausq <- parameter_grid$tausq[index]
+    print(index)
+    
+    for (method in method_names) {
+      for (j in 1:iter) {
+        cur_result <- tryCatch(
+          readRDS(paste0(data_dir, "/", method, "/", method, "_index_", index, "_iter_", j, "_results.rds")),
+          error = function(e) NULL
+        )
+        
+        if (is.null(cur_result) || (length(cur_result) == 1 && is.na(cur_result))) next
+        
+        nonnulls <- cur_result$name
+        
+        if (!is.list(cur_result)) {
+          fp <- 0; fdp <- 0; fwe <- 0; fdp_min <- 0
+          power_raw <- 0; power_bh <- 0; power_bonf <- 0; power_min <- 0
+          ssq_diff <- 0; tausq_diff <- 0
+        } else {
+          if (is.null(cur_result$pip)) {
+            p.vals <- 1 - cur_result$marginalPIP
+            variants <- cur_result$variants
+            est_ssq <- cur_result$sigmasq
+            est_tausq <- cur_result$tausq
+          } else {
+            p.vals <- 1 - cur_result$pip
+            variants <- names(cur_result$pip)
+            est_ssq <- cur_result$sigma2
+            est_tausq <- 0
+          }
+          
+          nonnulls.raw <- variants[which(p.vals < alpha)]
+          nonnulls.bh <- variants[which(p.adjust(p.vals, method = "BH") < alpha)]
+          nonnulls.bonf <- variants[which(p.adjust(p.vals, method = "bonferroni") < alpha)]
+          nonnulls.min <- variants[order(p.vals)[1:s]]
+          
+          fp <- length(setdiff(nonnulls.raw, nonnulls)) / max(1, length(nonnulls.raw))
+          fdp <- length(setdiff(nonnulls.bh, nonnulls)) / max(1, length(nonnulls.bh))
+          fwe <- length(setdiff(nonnulls.bonf, nonnulls)) >= 1
+          fdp_min <- length(setdiff(nonnulls.min, nonnulls)) / max(1, length(nonnulls.min))
+          power_raw <- sum(nonnulls %in% nonnulls.raw) / s
+          power_bh <- sum(nonnulls %in% nonnulls.bh) / s
+          power_bonf <- sum(nonnulls %in% nonnulls.bonf) / s
+          power_min <- sum(nonnulls %in% nonnulls.min) / s
+          ssq_diff <- est_ssq - 1
+          tausq_diff <- est_tausq - true_tausq
+        }
+        
+        results[count,] <- c(method, j, grid_id, fp, fdp, fwe, fdp_min,
+                             power_raw, power_bh, power_bonf, power_min,
+                             ssq_diff, tausq_diff)
+        count <- count + 1
+      }
+    }
+  }
+  
+  results$fp <- as.numeric(results$fp)
+  results$fdp <- as.numeric(results$fdp)
+  results$fwe <- as.logical(results$fwe)
+  results$fdp_min <- as.numeric(results$fdp_min)
+  results$power_raw <- as.numeric(results$power_raw)
+  results$power_bh <- as.numeric(results$power_bh)
+  results$power_bonf <- as.numeric(results$power_bonf)
+  results$power_min <- as.numeric(results$power_min)
+  results$ssq_diff <- as.numeric(results$ssq_diff)
+  results$tausq_diff <- as.numeric(results$tausq_diff)
+  results$grid_id <- as.integer(results$grid_id)
+  results$iter <- as.integer(results$iter)
+  
+  results
+}
+
+process_pyseer_zero_results <- function(method_names, parameter_grid, iter,
+                                        alpha = 0.75, data_dir) {
   
   n <- length(method_names) * nrow(parameter_grid) * iter
   results <- data.frame(
@@ -849,7 +1145,11 @@ process_pyseer_results <- function(method_names, parameter_grid, iter,
         
         nonnulls <- cur_result$name
         
-        if (!is.data.frame(cur_result) && !is.list(cur_result)) {
+        has_pvals <- (is.data.frame(cur_result) || is.list(cur_result)) &&
+          !is.null(cur_result$lrt.pvalue) &&
+          !is.null(cur_result$variant)
+        
+        if (!has_pvals) {
           fp <- NA; fdp <- NA; fwe <- NA; fdp_min <- NA
           power_raw <- NA; power_bh <- NA; power_bonf <- NA; power_min <- NA
         } else {
@@ -860,19 +1160,24 @@ process_pyseer_results <- function(method_names, parameter_grid, iter,
           p.vals <- p.vals[keep]
           variants <- variants[keep]
           
-          nonnulls.raw <- variants[which(p.vals < alpha)]
-          nonnulls.bh <- variants[which(p.adjust(p.vals, method = "BH") < alpha)]
-          nonnulls.bonf <- variants[which(p.adjust(p.vals, method = "bonferroni") < alpha)]
-          nonnulls.min <- variants[order(p.vals)[1:s]]
-          
-          fp <- length(setdiff(nonnulls.raw, nonnulls)) / max(1, length(nonnulls.raw))
-          fdp <- length(setdiff(nonnulls.bh, nonnulls)) / max(1, length(nonnulls.bh))
-          fwe <- length(setdiff(nonnulls.bonf, nonnulls)) >= 1
-          fdp_min <- length(setdiff(nonnulls.min, nonnulls)) / max(1, length(nonnulls.min))
-          power_raw <- sum(nonnulls %in% nonnulls.raw) / s
-          power_bh <- sum(nonnulls %in% nonnulls.bh) / s
-          power_bonf <- sum(nonnulls %in% nonnulls.bonf) / s
-          power_min <- sum(nonnulls %in% nonnulls.min) / s
+          if (length(p.vals) == 0) {
+            fp <- 0; fdp <- 0; fwe <- 0; fdp_min <- 0
+            power_raw <- 0; power_bh <- 0; power_bonf <- 0; power_min <- 0
+          } else {
+            nonnulls.raw <- variants[which(p.vals < alpha)]
+            nonnulls.bh <- variants[which(p.adjust(p.vals, method = "BH") < alpha)]
+            nonnulls.bonf <- variants[which(p.adjust(p.vals, method = "bonferroni") < alpha)]
+            nonnulls.min <- variants[order(p.vals)[1:s]]
+            
+            fp <- length(setdiff(nonnulls.raw, nonnulls)) / max(1, length(nonnulls.raw))
+            fdp <- length(setdiff(nonnulls.bh, nonnulls)) / max(1, length(nonnulls.bh))
+            fwe <- length(setdiff(nonnulls.bonf, nonnulls)) >= 1
+            fdp_min <- length(setdiff(nonnulls.min, nonnulls)) / max(1, length(nonnulls.min))
+            power_raw <- sum(nonnulls %in% nonnulls.raw) / s
+            power_bh <- sum(nonnulls %in% nonnulls.bh) / s
+            power_bonf <- sum(nonnulls %in% nonnulls.bonf) / s
+            power_min <- sum(nonnulls %in% nonnulls.min) / s
+          }
         }
         
         results[count,] <- c(method, j, grid_id, fp, fdp, fwe, fdp_min,

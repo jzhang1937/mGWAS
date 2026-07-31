@@ -1076,18 +1076,19 @@ susieK_naive <- function(data, L, K = NULL, phylo = TRUE,
 #' @param K a similarity matrix
 #' @param phylo whether to use the given tree to construct the similarity matrix K
 #' @param est_ssq estimate prior effect size variances s^2 using MLE
-#' @param ssq length-L initialization s^2 for each effect Default: 0.2 for every effect
-#' @param ssq_range lower and upper bounds for each s^2, if estimated
+#' @param ssq length-L initialization s^2 for each effect. Default: NULL -> 0.2 * var(y) for every effect
+#' @param ssq_range log-scale lower and upper search bounds for each s^2, if estimated (optimization happens over log(s^2)). Default: NULL -> c(-10, 10)
 #' @param pi0 length-p vector of prior causal probability for each SNP; must sum to 1 Default: 1/p for every SNP
 #' @param est_sigmasq estimate variance sigma^2
 #' @param est_tausq estimate both variances sigma^2 and tau^2
-#' @param sigmasq initial value for sigma^2
+#' @param sigmasq initial value for sigma^2. Default: NULL -> var(y)
 #' @param tausq initial value for tau^2
 #' @param method one of {'moments','MLE'} (sigma^2,tau^2) are estimated using method-of-moments or MLE
 #' @param sigmasq_range lower and upper bounds for sigma^2, if estimated using MLE 
 #' @param tausq_range lower and upper bounds for tau^2
-#' @param PIP p x L initializations of PIPs Default: 1/#SNPs for each SNP and effect
-#' @param mu p x L initializations of mu; Default: 0 for each SNP and effect
+#' @param prior_tol threshold below which an estimated s^2 is floored to exactly zero 
+#' @param PIP p x L initializations of PIPs. Default: 1/#SNPs for each SNP and effect
+#' @param mu p x L initializations of mu. Default: 0 for each SNP and effect
 #' @param maxiter maximum number of SuSiE iterations
 #' @param PIP_tol convergence threshold for PIP difference between iterations
 #' @param verbose 
@@ -1097,18 +1098,24 @@ susieK_naive <- function(data, L, K = NULL, phylo = TRUE,
 #'
 #' @examples
 susieK <- function(data, L, K = NULL, phylo = TRUE,
-                   est_ssq = TRUE, ssq = NULL, ssq_range = c(0,1), pi0 = NULL,
+                   est_ssq = TRUE, ssq = NULL, ssq_range = NULL, pi0 = NULL,
                    est_sigmasq = TRUE, est_tausq = TRUE,
-                   sigmasq = 1, tausq = 0,
+                   sigmasq = NULL, tausq = 0,
                    method = "moments",
                    sigmasq_range = NULL, tausq_range = NULL,
+                   prior_tol = 1e-9,
                    PIP = NULL, mu = NULL,
-                   maxiter = 100, PIP_tol = 1e-3, LD = FALSE, verbose = FALSE) {
+                   maxiter = 100, PIP_tol = 1e-4, LD = FALSE, verbose = FALSE) {
   y <- data$y
   y <- y - mean(y)
+  var_y <- var(y)
+  
   X <- data$X
   X <- sweep(X, 2, colMeans(X), FUN = "-")
-  X <- sweep(X, 2, apply(X, 2, function(x) sqrt(mean((x - mean(x))^2))), FUN = "/")
+  col_sd <- apply(X, 2, function(x) sqrt(mean(x^2)))
+  col_sd[col_sd < .Machine$double.eps] <- 1
+  X <- sweep(X, 2, col_sd, FUN = "/")
+  
   tree <- data$tree
   n <- nrow(X); p <- ncol(X)
   if (LD) {
@@ -1131,7 +1138,9 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
   }
   if (phylo) K <- ape::vcv.phylo(tree)[samples, samples]
   
-  if (is.null(ssq)) ssq <- rep(0.2, L)
+  if (is.null(ssq))       ssq       <- rep(0.2 * var_y, L)
+  if (is.null(sigmasq))   sigmasq   <- var_y
+  if (is.null(ssq_range)) ssq_range <- c(-10, 10)
   if (is.null(PIP)) PIP <- matrix(1/p, p, L)
   if (is.null(mu))  mu  <- matrix(0,   p, L)
   
@@ -1147,6 +1156,10 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
   # --- eigendecomposition of K (n x n) for the GLS weights ---
   eig     <- eigen(K, symmetric = TRUE)
   eigvals <- rev(eig$values)
+  if (any(eigvals < -1e-8)) {
+    warning("K is not positive semi-definite; setting negative eigenvalues to 0.")
+  }
+  eigvals[eigvals < 0] <- 0
   Q       <- eig$vectors[, rev(seq_len(ncol(eig$vectors)))]
   
   Z       <- crossprod(Q, X)     # Q'X  (n x p)
@@ -1189,13 +1202,15 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegar  <- XtOmegay - XtOmegaXb
       
       if (est_ssq) {
-        f <- function(x) {
+        f <- function(lx) {
+          x <- exp(lx)
           val <- -0.5 * log(1 + x * diagXtOmegaX) +
             x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) + logpi0
           -logsumexp(val)
         }
         opt    <- optimize(f, ssq_range, tol = 1e-5)
-        ssq[l] <- opt$minimum
+        ssq[l] <- exp(opt$minimum)
+        if (ssq[l] < prior_tol) ssq[l] <- 0
         if (verbose) cat(sprintf("Update s^2 for effect %d to %f\n", l, ssq[l]))
       }
       
@@ -1216,7 +1231,7 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
                     diagXtX, diagXtXsq,
                     trK = trK, trXtX, trXtKX,
                     est_sigmasq, est_tausq, verbose)
-        sigmasq <- res$sigmasq
+        sigmasq <- max(res$sigmasq, var_y / 10000)
         tausq   <- res$tausq
       } else {
         stop("MLE not implemented for K")
@@ -1250,7 +1265,7 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
 # SuSiE with an arbitrary similarity matrix K for the residual covariance.
 # Model:  Y = X beta + epsilon,   epsilon ~ N(0, tau^2 K + sigma^2 I)
 #
-# Identical interface to susieK; only the MoM step differs.
+# Identical to susieK except the MoM step differs.
 # ──────────────────────────────────────────────────────────────────────────────
 #' Title
 #' @param data a list containing a vector of outcomes y, data matrix X, and optionally a tree
@@ -1258,17 +1273,19 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
 #' @param K a similarity matrix
 #' @param phylo whether to use the given tree to construct the similarity matrix K
 #' @param est_ssq estimate prior effect size variances s^2 using MLE
-#' @param ssq length-L initialization s^2 for each effect Default: 0.2 for every effect
-#' @param ssq_range lower and upper bounds for each s^2, if estimated
+#' @param ssq length-L initialization s^2 for each effect. Default: NULL -> 0.2 * var(y) for every effect
+#' @param ssq_range log-scale lower and upper search bounds for each s^2, if estimated (optimization happens over log(s^2)). Default: NULL -> c(-10, 10)
 #' @param pi0 length-p vector of prior causal probability for each SNP; must sum to 1 Default: 1/p for every SNP
 #' @param est_sigmasq estimate variance sigma^2
 #' @param est_tausq estimate both variances sigma^2 and tau^2
-#' @param sigmasq initial value for sigma^2
+#' @param sigmasq initial value for sigma^2. Default: NULL -> var(y)
 #' @param tausq initial value for tau^2
+#' @param method one of {'moments','MLE'} (sigma^2,tau^2) are estimated using method-of-moments or MLE
 #' @param sigmasq_range lower and upper bounds for sigma^2, if estimated using MLE 
 #' @param tausq_range lower and upper bounds for tau^2
-#' @param PIP p x L initializations of PIPs Default: 1/#SNPs for each SNP and effect
-#' @param mu p x L initializations of mu; Default: 0 for each SNP and effect
+#' @param prior_tol threshold below which an estimated s^2 is floored to exactly zero 
+#' @param PIP p x L initializations of PIPs. Default: 1/#SNPs for each SNP and effect
+#' @param mu p x L initializations of mu. Default: 0 for each SNP and effect
 #' @param maxiter maximum number of SuSiE iterations
 #' @param PIP_tol convergence threshold for PIP difference between iterations
 #' @param verbose 
@@ -1278,18 +1295,23 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
 #'
 #' @examples
 susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
-                     est_ssq     = TRUE,  ssq = NULL, ssq_range = c(0, 1), pi0 = NULL,
+                     est_ssq     = TRUE,  ssq = NULL, ssq_range = NULL, pi0 = NULL,
                      est_sigmasq = TRUE,  est_tausq = TRUE,
-                     sigmasq = 1, tausq = 0,
+                     sigmasq = NULL, tausq = 0,
                      sigmasq_range = NULL, tausq_range = NULL,
+                     prior_tol = 1e-9,
                      PIP = NULL, mu = NULL,
-                     maxiter = 100, PIP_tol = 1e-3, LD = FALSE, verbose = FALSE) {
+                     maxiter = 100, PIP_tol = 1e-4, LD = FALSE, verbose = FALSE) {
   
   # ── data prep ────────────────────────────────────────────────────────────────
   y    <- data$y;   y <- y - mean(y)
+  var_y <- var(y)
+  
   X    <- data$X
   X    <- sweep(X, 2, colMeans(X), FUN = "-")
-  X    <- sweep(X, 2, apply(X, 2, function(x) sqrt(mean(x^2))), FUN = "/")
+  col_sd <- apply(X, 2, function(x) sqrt(mean(x^2)))
+  col_sd[col_sd < .Machine$double.eps] <- 1
+  X    <- sweep(X, 2, col_sd, FUN = "/")
   tree <- data$tree
   
   n <- nrow(X); p <- ncol(X)
@@ -1312,8 +1334,10 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
   }
   if (phylo) K <- ape::vcv.phylo(tree)[samples, samples]
   
-  # ── initialisations ──────────────────────────────────────────────────────────
-  if (is.null(ssq)) ssq <- rep(0.2, L)
+  # ── initializations ──────────────────────────────────────────────────────────
+  if (is.null(ssq))       ssq       <- rep(0.2 * var_y, L)
+  if (is.null(sigmasq))   sigmasq   <- var_y
+  if (is.null(ssq_range)) ssq_range <- c(-10, 10)
   if (is.null(PIP)) PIP <- matrix(1 / p, p, L)
   if (is.null(mu))  mu  <- matrix(0,     p, L)
   
@@ -1331,6 +1355,10 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
   # ── eigen decomposition of K ─────────────────────────────────────────────────
   eig     <- eigen(K, symmetric = TRUE)
   eigvals <- rev(eig$values)
+  if (any(eigvals < -1e-8)) {
+    warning("K is not positive semi-definite; setting negative eigenvalues to 0.")
+  }
+  eigvals[eigvals < 0] <- 0
   Q       <- eig$vectors[, rev(seq_len(ncol(eig$vectors)))]
   
   Z       <- crossprod(Q, X)   # Q'X,  n x p
@@ -1372,13 +1400,15 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegar      <- XtOmegay - XtOmegaXb
       
       if (est_ssq) {
-        f <- function(x) {
+        f <- function(lx) {
+          x <- exp(lx)
           val <- -0.5 * log(1 + x * diagXtOmegaX) +
             x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) + logpi0
           -logsumexp(val)
         }
         opt    <- optimize(f, ssq_range, tol = 1e-5)
-        ssq[l] <- opt$minimum
+        ssq[l] <- exp(opt$minimum)
+        if (ssq[l] < prior_tol) ssq[l] <- 0
         if (verbose) cat(sprintf("  s^2[%d] -> %f\n", l, ssq[l]))
       }
       
@@ -1404,7 +1434,7 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
         est_sigmasq = est_sigmasq, est_tausq = est_tausq,
         verbose = verbose
       )
-      sigmasq <- res$sigmasq
+      sigmasq <- max(res$sigmasq, var_y / 10000)
       tausq   <- res$tausq
       
       w            <- 1 / (tausq * eigvals + sigmasq)
@@ -1447,21 +1477,26 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
 # The precomputation is also simpler: only the eigenbasis quantities are needed.
 # ──────────────────────────────────────────────────────────────────────────────
 susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
-                     est_ssq = TRUE, ssq = NULL, ssq_range = c(0, 1), pi0 = NULL,
+                     est_ssq = TRUE, ssq = NULL, ssq_range = NULL, pi0 = NULL,
                      est_sigmasq = TRUE, est_tausq = TRUE,
-                     sigmasq = 1, tausq = 0,
+                     sigmasq = NULL, tausq = 0,
                      sigmasq_range = NULL, tausq_range = NULL,
+                     prior_tol = 1e-9,
                      PIP = NULL, mu = NULL,
-                     maxiter = 100, PIP_tol = 1e-3,
+                     maxiter = 100, PIP_tol = 1e-4,
                      maxiter_vc = 20, tol_vc = 1e-8,
                      LD = FALSE, 
                      verbose = FALSE) {
   
   # ── data prep ────────────────────────────────────────────────────────────────
   y    <- data$y;  y <- y - mean(y)
+  var_y <- var(y)
+  
   X    <- data$X
   X    <- sweep(X, 2, colMeans(X), FUN = "-")
-  X    <- sweep(X, 2, apply(X, 2, function(x) sqrt(mean(x^2))), FUN = "/")
+  col_sd <- apply(X, 2, function(x) sqrt(mean(x^2)))
+  col_sd[col_sd < .Machine$double.eps] <- 1
+  X    <- sweep(X, 2, col_sd, FUN = "/")
   tree <- data$tree
   
   n <- nrow(X); p <- ncol(X)
@@ -1481,8 +1516,10 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
   if (is.null(K) & !phylo) { K <- X %*% t(X); message("K required if not using tree; using XX^T") }
   if (phylo) K <- ape::vcv.phylo(tree)[samples, samples]
   
-  # ── initialisations ───────────────────────────────────────────────────────────
-  if (is.null(ssq)) ssq <- rep(0.2, L)
+  # ── initializations ───────────────────────────────────────────────────────────
+  if (is.null(ssq))       ssq       <- rep(0.2 * var_y, L)
+  if (is.null(sigmasq))   sigmasq   <- var_y
+  if (is.null(ssq_range)) ssq_range <- c(-10, 10)
   if (is.null(PIP)) PIP <- matrix(1 / p, p, L)
   if (is.null(mu))  mu  <- matrix(0,     p, L)
   
@@ -1496,6 +1533,10 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
   # ── eigendecomposition of K ───────────────────────────────────────────────────
   eig     <- eigen(K, symmetric = TRUE)
   eigvals <- rev(eig$values)
+  if (any(eigvals < -1e-8)) {
+    warning("K is not positive semi-definite; setting negative eigenvalues to 0.")
+  }
+  eigvals[eigvals < 0] <- 0
   Q       <- eig$vectors[, rev(seq_len(ncol(eig$vectors)))]
   
   Z       <- crossprod(Q, X)            # Q'X,  n x p
@@ -1522,12 +1563,15 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegar  <- XtOmegay - XtOmegaXb
       
       if (est_ssq) {
-        f <- function(x) {
+        f <- function(lx) {
+          x <- exp(lx)
           val <- -0.5 * log(1 + x * diagXtOmegaX) +
             x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) + logpi0
           -logsumexp(val)
         }
-        ssq[l] <- optimize(f, ssq_range, tol = 1e-5)$minimum
+        opt    <- optimize(f, ssq_range, tol = 1e-5)
+        ssq[l] <- exp(opt$minimum)
+        if (ssq[l] < prior_tol) ssq[l] <- 0
         if (verbose) cat(sprintf("  s^2[%d] -> %f\n", l, ssq[l]))
       }
       
@@ -1546,7 +1590,7 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
                        Z, eigvals, y_tilde,
                        est_sigmasq, est_tausq,
                        maxiter_vc, tol_vc, verbose)
-      sigmasq <- res$sigmasq
+      sigmasq <- max(res$sigmasq, var_y / 10000)
       tausq   <- res$tausq
       
       w            <- 1 / (tausq * eigvals + sigmasq)
