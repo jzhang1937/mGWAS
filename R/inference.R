@@ -1077,7 +1077,7 @@ susieK_naive <- function(data, L, K = NULL, phylo = TRUE,
 #' @param phylo whether to use the given tree to construct the similarity matrix K
 #' @param est_ssq estimate prior effect size variances s^2 using MLE
 #' @param ssq length-L initialization s^2 for each effect. Default: NULL -> 0.2 * var(y) for every effect
-#' @param ssq_range log-scale lower and upper search bounds for each s^2, if estimated (optimization happens over log(s^2)). Default: NULL -> c(-10, 10)
+#' @param ssq_range lower and upper search bounds for each s^2, if estimated. Default: NULL -> c(0, 1)
 #' @param pi0 length-p vector of prior causal probability for each SNP; must sum to 1 Default: 1/p for every SNP
 #' @param est_sigmasq estimate variance sigma^2
 #' @param est_tausq estimate both variances sigma^2 and tau^2
@@ -1107,12 +1107,12 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
                    PIP = NULL, mu = NULL,
                    maxiter = 100, PIP_tol = 1e-4, LD = FALSE, verbose = FALSE) {
   y <- data$y
-  y <- y - mean(y)
+  y <- as.vector(y) - mean(y)
   var_y <- var(y)
   
   X <- data$X
   X <- sweep(X, 2, colMeans(X), FUN = "-")
-  col_sd <- apply(X, 2, function(x) sqrt(mean(x^2)))
+  col_sd <- apply(X, 2, function(x) sd(x))
   col_sd[col_sd < .Machine$double.eps] <- 1
   X <- sweep(X, 2, col_sd, FUN = "/")
   
@@ -1140,7 +1140,7 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
   
   if (is.null(ssq))       ssq       <- rep(0.2 * var_y, L)
   if (is.null(sigmasq))   sigmasq   <- var_y
-  if (is.null(ssq_range)) ssq_range <- c(-10, 10)
+  if (is.null(ssq_range)) ssq_range <- c(0, 1)
   if (is.null(PIP)) PIP <- matrix(1/p, p, L)
   if (is.null(mu))  mu  <- matrix(0,   p, L)
   
@@ -1202,14 +1202,16 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegar  <- XtOmegay - XtOmegaXb
       
       if (est_ssq) {
-        f <- function(lx) {
-          x <- exp(lx)
+        f <- function(x) {
           val <- -0.5 * log(1 + x * diagXtOmegaX) +
             x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) + logpi0
           -logsumexp(val)
         }
-        opt    <- optimize(f, ssq_range, tol = 1e-5)
-        ssq[l] <- exp(opt$minimum)
+        opt    <- optimize(f, ssq_range, tol = sqrt(.Machine$double.eps))
+        ssq_candidate <- opt$minimum
+        if (f(ssq_candidate) <= f(ssq[l])) {
+          ssq[l] <- ssq_candidate
+        }
         if (ssq[l] < prior_tol) ssq[l] <- 0
         if (verbose) cat(sprintf("Update s^2 for effect %d to %f\n", l, ssq[l]))
       }
@@ -1222,6 +1224,10 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
       lbf[l]  <- logsumexp(logPIP)
       PIP[,l] <- exp(logPIP - lbf[l])
     }
+    
+    PIP_diff <- max(abs(PIP_prev - PIP))
+    if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
+    if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
     if (est_sigmasq || est_tausq) {
       if (method == "moments") {
@@ -1242,9 +1248,6 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegay     <- crossprod(Z, w * y_tilde)
     }
     
-    PIP_diff <- max(abs(PIP_prev - PIP))
-    if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
-    if (PIP_diff < PIP_tol) { converged <- TRUE; break }
   }
   
   if (!exists("converged")) converged <- FALSE
@@ -1274,7 +1277,7 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
 #' @param phylo whether to use the given tree to construct the similarity matrix K
 #' @param est_ssq estimate prior effect size variances s^2 using MLE
 #' @param ssq length-L initialization s^2 for each effect. Default: NULL -> 0.2 * var(y) for every effect
-#' @param ssq_range log-scale lower and upper search bounds for each s^2, if estimated (optimization happens over log(s^2)). Default: NULL -> c(-10, 10)
+#' @param ssq_range lower and upper search bounds for each s^2, if estimated. Default: NULL -> c(0, 1)
 #' @param pi0 length-p vector of prior causal probability for each SNP; must sum to 1 Default: 1/p for every SNP
 #' @param est_sigmasq estimate variance sigma^2
 #' @param est_tausq estimate both variances sigma^2 and tau^2
@@ -1304,12 +1307,12 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
                      maxiter = 100, PIP_tol = 1e-4, LD = FALSE, verbose = FALSE) {
   
   # ── data prep ────────────────────────────────────────────────────────────────
-  y    <- data$y;   y <- y - mean(y)
+  y    <- data$y;   y <- as.vector(y) - mean(y)
   var_y <- var(y)
   
   X    <- data$X
   X    <- sweep(X, 2, colMeans(X), FUN = "-")
-  col_sd <- apply(X, 2, function(x) sqrt(mean(x^2)))
+  col_sd <- apply(X, 2, function(x) sd(x))
   col_sd[col_sd < .Machine$double.eps] <- 1
   X    <- sweep(X, 2, col_sd, FUN = "/")
   tree <- data$tree
@@ -1337,7 +1340,7 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
   # ── initializations ──────────────────────────────────────────────────────────
   if (is.null(ssq))       ssq       <- rep(0.2 * var_y, L)
   if (is.null(sigmasq))   sigmasq   <- var_y
-  if (is.null(ssq_range)) ssq_range <- c(-10, 10)
+  if (is.null(ssq_range)) ssq_range <- c(0, 1)
   if (is.null(PIP)) PIP <- matrix(1 / p, p, L)
   if (is.null(mu))  mu  <- matrix(0,     p, L)
   
@@ -1400,14 +1403,16 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegar      <- XtOmegay - XtOmegaXb
       
       if (est_ssq) {
-        f <- function(lx) {
-          x <- exp(lx)
+        f <- function(x) {
           val <- -0.5 * log(1 + x * diagXtOmegaX) +
             x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) + logpi0
           -logsumexp(val)
         }
-        opt    <- optimize(f, ssq_range, tol = 1e-5)
-        ssq[l] <- exp(opt$minimum)
+        opt <- optimize(f, ssq_range, tol = sqrt(.Machine$double.eps))
+        ssq_candidate <- opt$minimum
+        if (f(ssq_candidate) <= f(ssq[l])) {
+          ssq[l] <- ssq_candidate
+        }
         if (ssq[l] < prior_tol) ssq[l] <- 0
         if (verbose) cat(sprintf("  s^2[%d] -> %f\n", l, ssq[l]))
       }
@@ -1420,6 +1425,11 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
       lbf[l]  <- logsumexp(logPIP)
       PIP[, l] <- exp(logPIP - lbf[l])
     }
+    
+    # -- convergence check --
+    PIP_diff <- max(abs(PIP_prev - PIP))
+    if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
+    if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
     # -- variance component update (MoMKv2) --
     if (est_sigmasq || est_tausq) {
@@ -1442,10 +1452,6 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegay     <- as.numeric(crossprod(Z, w * y_tilde))
     }
     
-    # -- convergence check --
-    PIP_diff <- max(abs(PIP_prev - PIP))
-    if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
-    if (PIP_diff < PIP_tol) { converged <- TRUE; break }
   }
   
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
@@ -1489,12 +1495,12 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
                      verbose = FALSE) {
   
   # ── data prep ────────────────────────────────────────────────────────────────
-  y    <- data$y;  y <- y - mean(y)
+  y    <- data$y;  y <- as.vector(y) - mean(y)
   var_y <- var(y)
   
   X    <- data$X
   X    <- sweep(X, 2, colMeans(X), FUN = "-")
-  col_sd <- apply(X, 2, function(x) sqrt(mean(x^2)))
+  col_sd <- apply(X, 2, function(x) sd(x))
   col_sd[col_sd < .Machine$double.eps] <- 1
   X    <- sweep(X, 2, col_sd, FUN = "/")
   tree <- data$tree
@@ -1519,7 +1525,7 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
   # ── initializations ───────────────────────────────────────────────────────────
   if (is.null(ssq))       ssq       <- rep(0.2 * var_y, L)
   if (is.null(sigmasq))   sigmasq   <- var_y
-  if (is.null(ssq_range)) ssq_range <- c(-10, 10)
+  if (is.null(ssq_range)) ssq_range <- c(0, 1)
   if (is.null(PIP)) PIP <- matrix(1 / p, p, L)
   if (is.null(mu))  mu  <- matrix(0,     p, L)
   
@@ -1563,14 +1569,16 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegar  <- XtOmegay - XtOmegaXb
       
       if (est_ssq) {
-        f <- function(lx) {
-          x <- exp(lx)
+        f <- function(x) {
           val <- -0.5 * log(1 + x * diagXtOmegaX) +
             x * XtOmegar^2 / (2 * (1 + x * diagXtOmegaX)) + logpi0
           -logsumexp(val)
         }
-        opt    <- optimize(f, ssq_range, tol = 1e-5)
-        ssq[l] <- exp(opt$minimum)
+        opt <- optimize(f, ssq_range, tol = sqrt(.Machine$double.eps))
+        ssq_candidate <- opt$minimum
+        if (f(ssq_candidate) <= f(ssq[l])) {
+          ssq[l] <- ssq_candidate
+        }
         if (ssq[l] < prior_tol) ssq[l] <- 0
         if (verbose) cat(sprintf("  s^2[%d] -> %f\n", l, ssq[l]))
       }
@@ -1583,6 +1591,11 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
       lbf[l]   <- logsumexp(logPIP)
       PIP[, l] <- exp(logPIP - lbf[l])
     }
+    
+    # -- convergence check --
+    PIP_diff <- max(abs(PIP_prev - PIP))
+    if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
+    if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
     # -- variance component update (ELBO-based IRLS) --
     if (est_sigmasq || est_tausq) {
@@ -1598,10 +1611,6 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
       XtOmegay     <- as.numeric(crossprod(Z, w * y_tilde))
     }
     
-    # -- convergence check --
-    PIP_diff <- max(abs(PIP_prev - PIP))
-    if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
-    if (PIP_diff < PIP_tol) { converged <- TRUE; break }
   }
   
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)

@@ -42,7 +42,7 @@ susieK(
 
 \item{ssq}{length-L initialization s^2 for each effect. Default: NULL -> 0.2 * var(y) for every effect}
 
-\item{ssq_range}{log-scale lower and upper search bounds for each s^2, if estimated (optimization happens over log(s^2)). Default: NULL -> c(-10, 10)}
+\item{ssq_range}{lower and upper search bounds for each s^2, if estimated. Default: NULL -> c(0, 1)}
 
 \item{pi0}{length-p vector of prior causal probability for each SNP; must sum to 1 Default: 1/p for every SNP}
 
