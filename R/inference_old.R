@@ -272,6 +272,8 @@ susieK_old <- function(data, L, K = NULL, phylo = TRUE,
   
   omega <- diagXtOmegaX + matrix(1 / ssq, nrow = p, ncol = L, byrow = TRUE)
   
+  converged <- FALSE
+  
   for (it in seq_len(maxiter)) {
     if (verbose) cat("Iteration", it, "\n")
     PIP_prev <- PIP
@@ -326,15 +328,15 @@ susieK_old <- function(data, L, K = NULL, phylo = TRUE,
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
   }
   
-  if (!exists("converged")) converged <- FALSE
+  n_iterations <- if (exists("it")) it else 0
   
-  b           <- rowSums(mu * PIP)
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(PIP = PIP, marginalPIP = marginalPIP, mu = mu, omega = omega,
        lbf = lbf, lbf_variable = lbf_variable,
        ssq = ssq, sigmasq = sigmasq,
-       tausq = tausq, converged = converged, variants = variants,
+       tausq = tausq, converged = converged, 
+       n_iterations = n_iterations, variants = variants,
        determinant_MoM = determinant_MoM, LD = ld)
 }
 
