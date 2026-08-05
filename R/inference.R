@@ -1253,14 +1253,15 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
   }
   
   n_iterations <- if (exists("it")) it else 0
-  
+  final_pip_diff <- PIP_diff
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(PIP = PIP, marginalPIP = marginalPIP, mu = mu, omega = omega,
        lbf = lbf, lbf_variable = lbf_variable,
        ssq = ssq, sigmasq = sigmasq,
        tausq = tausq, converged = converged, 
-       n_iterations = n_iterations, variants = variants,
+       n_iterations = n_iterations, final_pip_diff = final_pip_diff, 
+       variants = variants,
        determinant_MoM = determinant_MoM, LD = ld)
 }
 
@@ -1456,7 +1457,7 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
     
   }
   n_iterations <- if (exists("it")) it else 0
-  
+  final_pip_diff <- PIP_diff
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(
@@ -1471,6 +1472,7 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
     tausq       = tausq,
     converged   = converged,
     n_iterations = n_iterations,
+    final_pip_diff = final_pip_diff, 
     variants    = variants,
     determinant_MoM = determinant_MoM,
     LD = ld
@@ -1617,7 +1619,7 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
     
   }
   n_iterations <- if (exists("it")) it else 0
-  
+  final_pip_diff <- PIP_diff
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(
@@ -1632,6 +1634,7 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
     tausq        = tausq,
     converged    = converged,
     n_iterations = n_iterations,
+    final_pip_diff = final_pip_diff, 
     variants     = variants,
     LD = ld
   )
