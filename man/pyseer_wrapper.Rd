@@ -12,6 +12,7 @@ pyseer_wrapper(
   conda_bin,
   pyseer_env,
   max_dimensions = 10,
+  maf = NULL,
   phylo = FALSE,
   jaccard = FALSE,
   hamming = FALSE,
@@ -35,6 +36,8 @@ The rownames of X and names of y should align, and be a subset of tree$tip.label
 \item{pyseer_env}{name of conda environment}
 
 \item{max_dimensions}{if using method = "fixed", how many MDS dimensions to use.}
+
+\item{maf}{minor allele frequency threshold, default in pyseer is 0.01.}
 
 \item{phylo}{whether to use tree similarity/distance (tree must be provided).}
 

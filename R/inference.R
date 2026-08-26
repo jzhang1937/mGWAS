@@ -104,6 +104,7 @@ treeWAS_wrapper <- function(data, method = c("terminal", "simultaneous", "subseq
 #' @param extra_args 
 #' @param keep_files whether to keep the temp files, default FALSE.
 #' @param max_dimensions if using method = "fixed", how many MDS dimensions to use.
+#' @param maf minor allele frequency threshold, default in pyseer is 0.01.
 #' @param phylo whether to use tree similarity/distance (tree must be provided).
 #' @param jaccard whether to use jaccard similarity/distance.
 #' @param hamming whether to use hamming similarity/distance.
@@ -118,6 +119,7 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
                            conda_bin,
                            pyseer_env,
                            max_dimensions = 10,
+                           maf = NULL,
                            phylo = FALSE,
                            jaccard = FALSE,
                            hamming = FALSE,
@@ -272,6 +274,10 @@ pyseer_wrapper <- function(data, method, tmpdir = "pyseer_temp",
            paste0("--phenotypes ", pheno_file),
            paste0("--pres ", geno_file))
   
+  if (!is.null(maf)) {
+    cmd <- c(cmd, paste0("--min-af ", maf, " --max-af ", 1 - maf))
+  }
+
   if (method == "fixed") {cmd <- c(cmd, paste0("--distances ", dist_file, " --max-dimensions ", max_dimensions)) }
   if (method == "mixed") {cmd <- c(cmd, paste0("--similarity ", sim_file), "--lmm")}
   if (method == "elasticnet") cmd <- c(cmd, "--wg enet --alpha 1")
