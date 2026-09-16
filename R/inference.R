@@ -1058,8 +1058,8 @@ susieK_naive <- function(data, L, K = NULL, phylo = TRUE,
       # diagXtOmegaX <- colSums(sweep(Z^2, 1, w, `*`))
       XtOmegay     <- crossprod(Z, w * y_tilde)
     }
-    
-    PIP_diff <- max(abs(PIP_prev - PIP))
+    PIP_diff_vec <- PIP_prev - PIP
+    PIP_diff <- max(abs(PIP_diff_vec))
     if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
   }
@@ -1233,7 +1233,8 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
       PIP[,l] <- exp(logPIP - lbf[l])
     }
     
-    PIP_diff <- max(abs(PIP_prev - PIP))
+    PIP_diff_vec <- PIP_prev - PIP
+    PIP_diff <- max(abs(PIP_diff_vec))
     if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
@@ -1259,14 +1260,13 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
   }
   
   n_iterations <- if (exists("it")) it else 0
-  final_pip_diff <- PIP_diff
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(PIP = PIP, marginalPIP = marginalPIP, mu = mu, omega = omega,
        lbf = lbf, lbf_variable = lbf_variable,
        ssq = ssq, sigmasq = sigmasq,
        tausq = tausq, converged = converged, 
-       n_iterations = n_iterations, final_pip_diff = final_pip_diff, 
+       n_iterations = n_iterations, pip_diff_vec = PIP_diff_vec, final_pip_diff = PIP_diff, 
        variants = variants,
        determinant_MoM = determinant_MoM, LD = ld)
 }
@@ -1436,7 +1436,8 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
     }
     
     # -- convergence check --
-    PIP_diff <- max(abs(PIP_prev - PIP))
+    PIP_diff_vec <- PIP_prev - PIP
+    PIP_diff <- max(abs(PIP_diff_vec))
     if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
@@ -1463,7 +1464,6 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
     
   }
   n_iterations <- if (exists("it")) it else 0
-  final_pip_diff <- PIP_diff
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(
@@ -1478,7 +1478,8 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
     tausq       = tausq,
     converged   = converged,
     n_iterations = n_iterations,
-    final_pip_diff = final_pip_diff, 
+    pip_diff_vec = PIP_diff_vec,
+    final_pip_diff = PIP_diff, 
     variants    = variants,
     determinant_MoM = determinant_MoM,
     LD = ld
@@ -1605,7 +1606,8 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
     }
     
     # -- convergence check --
-    PIP_diff <- max(abs(PIP_prev - PIP))
+    PIP_diff_vec <- PIP_prev - PIP
+    PIP_diff <- max(abs(PIP_diff_vec))
     if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
@@ -1625,7 +1627,6 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
     
   }
   n_iterations <- if (exists("it")) it else 0
-  final_pip_diff <- PIP_diff
   marginalPIP <- 1 - apply(1 - PIP, 1, prod)
   
   list(
@@ -1640,7 +1641,8 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
     tausq        = tausq,
     converged    = converged,
     n_iterations = n_iterations,
-    final_pip_diff = final_pip_diff, 
+    pip_diff_vec = PIP_diff_vec,
+    final_pip_diff = PIP_diff, 
     variants     = variants,
     LD = ld
   )
