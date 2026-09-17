@@ -1058,8 +1058,7 @@ susieK_naive <- function(data, L, K = NULL, phylo = TRUE,
       # diagXtOmegaX <- colSums(sweep(Z^2, 1, w, `*`))
       XtOmegay     <- crossprod(Z, w * y_tilde)
     }
-    PIP_diff_vec <- PIP_prev - PIP
-    PIP_diff <- max(abs(PIP_diff_vec))
+    PIP_diff <- max(abs(PIP_prev - PIP))
     if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
   }
@@ -1233,8 +1232,7 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
       PIP[,l] <- exp(logPIP - lbf[l])
     }
     
-    PIP_diff_vec <- PIP_prev - PIP
-    PIP_diff <- max(abs(PIP_diff_vec))
+    PIP_diff <- max(abs(PIP_prev - PIP))
     if (verbose) cat("Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
@@ -1266,7 +1264,7 @@ susieK <- function(data, L, K = NULL, phylo = TRUE,
        lbf = lbf, lbf_variable = lbf_variable,
        ssq = ssq, sigmasq = sigmasq,
        tausq = tausq, converged = converged, 
-       n_iterations = n_iterations, pip_diff_vec = PIP_diff_vec, final_pip_diff = PIP_diff, 
+       n_iterations = n_iterations, PIP_prev = PIP_prev, final_pip_diff = PIP_diff, 
        variants = variants,
        determinant_MoM = determinant_MoM, LD = ld)
 }
@@ -1436,8 +1434,7 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
     }
     
     # -- convergence check --
-    PIP_diff_vec <- PIP_prev - PIP
-    PIP_diff <- max(abs(PIP_diff_vec))
+    PIP_diff <- max(abs(PIP_prev - PIP))
     if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
@@ -1478,7 +1475,7 @@ susieKv2 <- function(data, L, K = NULL, phylo = TRUE,
     tausq       = tausq,
     converged   = converged,
     n_iterations = n_iterations,
-    pip_diff_vec = PIP_diff_vec,
+    PIP_prev = PIP_prev,
     final_pip_diff = PIP_diff, 
     variants    = variants,
     determinant_MoM = determinant_MoM,
@@ -1606,8 +1603,7 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
     }
     
     # -- convergence check --
-    PIP_diff_vec <- PIP_prev - PIP
-    PIP_diff <- max(abs(PIP_diff_vec))
+    PIP_diff <- max(abs(PIP_prev - PIP))
     if (verbose) cat("  Max PIP diff:", PIP_diff, "\n")
     if (PIP_diff < PIP_tol) { converged <- TRUE; break }
     
@@ -1641,7 +1637,7 @@ susieKv3 <- function(data, L, K = NULL, phylo = TRUE,
     tausq        = tausq,
     converged    = converged,
     n_iterations = n_iterations,
-    pip_diff_vec = PIP_diff_vec,
+    PIP_prev     = PIP_prev,
     final_pip_diff = PIP_diff, 
     variants     = variants,
     LD = ld

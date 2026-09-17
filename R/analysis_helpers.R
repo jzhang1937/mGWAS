@@ -96,3 +96,49 @@ compute_subspace_tp <- function(X, S.hat, S.star) {
     X.S.star %*% MASS::ginv(t(X.S.star) %*% X.S.star) %*% t(X.S.star)
   sum(diag(A))
 }
+
+
+
+#' Flag variants whose marginal PIP changed
+#'
+#' @param PIP matrix of PIPs
+#' @param PIP_prev matrix of prev PIPs
+#' @param threshold minimum absolute change in marginal PIP to flag
+#' @param variant_names optional vector of variant names, same length/order as nrow(PIP)
+#'
+#' @returns list with changed_idx, changed_variants, and marginal_diff
+#' @export
+#'
+#' @examples
+check_pip_changes_marginal <- function(PIP, PIP_prev, threshold = 1e-4, variant_names = NULL) {
+  marginal_diff <- (1 - apply(1 - PIP, 1, prod)) - (1 - apply(1 - PIP_prev, 1, prod))
+  idx <- which(abs(marginal_diff) > threshold)
+  
+  list(
+    changed_idx      = idx,
+    changed_variants = if (!is.null(variant_names)) variant_names[idx] else idx,
+    marginal_diff    = marginal_diff
+  )
+}
+
+#' Flag variants whose PIP changed in any of the L effects
+#'
+#' @param PIP matrix of PIPs
+#' @param PIP_prev matrix of prev PIPs
+#' @param threshold minimum absolute change, in any single effect, to flag
+#' @param variant_names optional vector of variant names, same length/order as nrow(PIP)
+#'
+#' @returns list with changed_idx, changed_variants, and per_effect_diff
+#' @export
+#'
+#' @examples
+check_pip_changes_per_effect <- function(PIP, PIP_prev, threshold = 1e-4, variant_names = NULL) {
+  per_effect_diff <- PIP_prev - PIP
+  idx <- which(rowSums(abs(per_effect_diff) > threshold) > 0)
+  
+  list(
+    changed_idx      = idx,
+    changed_variants = if (!is.null(variant_names)) variant_names[idx] else idx,
+    per_effect_diff  = per_effect_diff
+  )
+}
